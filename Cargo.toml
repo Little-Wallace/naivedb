@@ -1,0 +1,20 @@
+[package]
+name = "simple-sql"
+version = "0.1.0"
+authors = ["Little-Wallace <bupt2013211450@gmail.com>"]
+edition = "2018"
+
+[[bin]]
+name = "simple-sql"
+path = "src/main.rs"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[dependencies]
+sqlparser = "0.9"
+msql-srv = { git = "https://github.com/Little-Wallace/msql-srv.git", branch = "async", default-features = false }
+mysql_common = "0.22"
+byteorder = "1"
+mysql = "*"
+tokio = { version = "0.2", features = ["full"] }
+async-trait = "0.1"
+thiserror = "1.0"
