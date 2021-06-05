@@ -1,11 +1,11 @@
 [package]
-name = "simple-sql"
+name = "naive-sql"
 version = "0.1.0"
 authors = ["Little-Wallace <bupt2013211450@gmail.com>"]
 edition = "2018"
 
 [[bin]]
-name = "simple-sql"
+name = "naivedb"
 path = "src/main.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
