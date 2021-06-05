@@ -3,7 +3,7 @@ use msql_srv::*;
 use std::io;
 use std::sync::Arc;
 use tokio;
-use tokio::stream::{StreamExt};
+use tokio::stream::StreamExt;
 
 pub struct Server {
     core: Arc<MysqlServerCore>,

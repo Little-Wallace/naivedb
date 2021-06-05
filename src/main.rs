@@ -1,4 +1,4 @@
-use simple_sql::server::Server;
+use naive_sql::server::Server;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

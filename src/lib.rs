@@ -6,4 +6,3 @@ pub mod server;
 mod session;
 mod store;
 mod table;
-mod executor;

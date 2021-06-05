@@ -24,7 +24,7 @@ impl Session {
         if let Some(table) = self.cache.get(name) {
             return Some(table.clone());
         }
-        let table = self.tables.read().unwrap().get(name).map(|t|t.clone());
+        let table = self.tables.read().unwrap().get(name).map(|t| t.clone());
         if let Some(t) = table.as_ref() {
             self.cache.insert(name.clone(), t.clone());
         }

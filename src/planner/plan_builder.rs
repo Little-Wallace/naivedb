@@ -2,10 +2,7 @@ use crate::errors::{MySQLError, MySQLResult};
 use crate::planner::{CreateTablePlan, PlanNode, PointGetPlan};
 use crate::session::SessionRef;
 use crate::table::schema::TableInfo;
-use sqlparser::ast::{
-    ColumnDef, ObjectName, Query, SqlOption, Statement,
-    TableConstraint,
-};
+use sqlparser::ast::{ColumnDef, ObjectName, Query, SqlOption, Statement, TableConstraint};
 use sqlparser::dialect::MySqlDialect;
 use sqlparser::parser::Parser;
 use std::sync::Arc;

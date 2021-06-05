@@ -1,9 +1,6 @@
 use crate::errors::{MySQLError, MySQLResult};
 use sqlparser::ast::DataType;
-use sqlparser::ast::{
-    ColumnDef, ColumnOption, Ident, ObjectName,
-    TableConstraint,
-};
+use sqlparser::ast::{ColumnDef, ColumnOption, Ident, ObjectName, TableConstraint};
 use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
