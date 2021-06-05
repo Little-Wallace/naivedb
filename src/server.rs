@@ -1,11 +1,9 @@
-use crate::conn::MysqlConnection;
+use crate::conn::MysqlServerCore;
 use msql_srv::*;
 use std::io;
 use std::sync::Arc;
 use tokio;
-use tokio::stream::{Stream, StreamExt};
-
-pub struct MysqlServerCore {}
+use tokio::stream::{StreamExt};
 
 pub struct Server {
     core: Arc<MysqlServerCore>,
@@ -13,7 +11,7 @@ pub struct Server {
 
 impl Server {
     pub fn create() -> Server {
-        let core = Arc::new(MysqlServerCore {});
+        let core = Arc::new(MysqlServerCore::new());
         Server { core }
     }
 
@@ -27,7 +25,7 @@ impl Server {
             while let Some(stream) = incoming.next().await {
                 match stream {
                     Ok(s) => {
-                        let conn = MysqlConnection::create(core.clone());
+                        let conn = core.create_connection();
                         if let Err(e) = MysqlIntermediary::run_on_tcp(conn, s).await {
                             println!("connection error, {:?}", e);
                         }

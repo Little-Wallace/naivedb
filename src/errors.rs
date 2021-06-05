@@ -2,7 +2,7 @@ use sqlparser::parser::ParserError;
 use std::io;
 use thiserror::Error;
 
-pub type MysqlResult<T> = std::result::Result<T, MySQLError>;
+pub type MySQLResult<T> = std::result::Result<T, MySQLError>;
 
 /// Describes why a message is discarded.
 #[derive(Debug, PartialEq, Clone, Error)]
@@ -20,6 +20,12 @@ pub enum MySQLError {
 
     #[error("index not exist")]
     NoIndex,
+
+    #[error("column not exist")]
+    NoColumn,
+
+    #[error("unsupported sql")]
+    UnsupportSQL,
 }
 
 impl From<io::Error> for MySQLError {

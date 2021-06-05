@@ -1,7 +1,7 @@
 use super::schema::*;
 use crate::common::EncodeValue;
 use crate::errors::MySQLError;
-use crate::errors::MysqlResult;
+use crate::errors::MySQLResult;
 use crate::table::decoder::{encode_value, get_handle_from_record_key, EncoderRow};
 use async_trait::async_trait;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
@@ -10,9 +10,9 @@ use std::sync::Arc;
 
 #[async_trait]
 pub trait TransactionWriter {
-    async fn check_constants(&self, key: &[u8]) -> MysqlResult<bool>;
-    async fn write(&mut self, key: &[u8], value: &[u8]) -> MysqlResult<()>;
-    async fn commit(&mut self) -> MysqlResult<()>;
+    async fn check_constants(&self, key: &[u8]) -> MySQLResult<bool>;
+    async fn write(&mut self, key: &[u8], value: &[u8]) -> MySQLResult<()>;
+    async fn commit(&mut self) -> MySQLResult<()>;
 }
 
 pub struct TableSource {
@@ -28,7 +28,7 @@ impl TableSource {
         writer: &mut W,
         row: &mut EncoderRow,
         values: Vec<EncodeValue>,
-    ) -> MysqlResult<Vec<u8>> {
+    ) -> MySQLResult<Vec<u8>> {
         let key = self.get_record_key(&values)?;
         if writer.check_constants(&key).await? {
             return Err(MySQLError::KeyExist);
@@ -63,7 +63,7 @@ impl TableSource {
         Ok(handle.to_vec())
     }
 
-    fn get_record_key(&self, values: &[EncodeValue]) -> MysqlResult<Vec<u8>> {
+    fn get_record_key(&self, values: &[EncodeValue]) -> MySQLResult<Vec<u8>> {
         if let Some(pk_index) = self.meta.get_primary_index() {
             let mut key = Vec::with_capacity(self.get_handle_size());
             key.push(b't');

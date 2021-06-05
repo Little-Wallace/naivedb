@@ -1,5 +1,4 @@
 use crate::common::EncodeValue;
-use crate::table::schema::ColumnInfo;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use sqlparser::ast::DataType;
 use std::io;
@@ -104,7 +103,8 @@ impl EncoderRow {
     }
 
     pub fn to_bytes(&self) -> io::Result<Vec<u8>> {
-        let mut data = Vec::with_capacity(self.buf.len() + (self.cols.len() + self.null_cols.len() + 4) * 4);
+        let mut data =
+            Vec::with_capacity(self.buf.len() + (self.cols.len() + self.null_cols.len() + 4) * 4);
         data.extend_from_slice(&[128, 0]);
         data.write_u16::<LittleEndian>(self.cols.len() as u16)?;
         data.write_u16::<LittleEndian>(self.null_cols.len() as u16)?;

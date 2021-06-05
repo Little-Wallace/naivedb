@@ -1,4 +1,9 @@
+use crate::errors::{MySQLError, MySQLResult};
 use sqlparser::ast::DataType;
+use sqlparser::ast::{
+    ColumnDef, ColumnOption, Ident, ObjectName,
+    TableConstraint,
+};
 use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -18,6 +23,14 @@ pub enum ColumnState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum IndexType {
+    None,
+    Primary,
+    Multiple,
+    Unique,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TableInfo {
     pub id: u64,
     pub name: String,
@@ -26,6 +39,8 @@ pub struct TableInfo {
     pub state: TableState,
     pub pk_is_handle: bool,
     pub auto_inc_id: u64,
+    pub max_column_id: u64,
+    pub max_index_id: u64,
     pub update_ts: u64,
 }
 
@@ -37,6 +52,8 @@ pub struct ColumnInfo {
     pub data_type: DataType,
     pub default_value: Vec<u8>,
     pub comment: String,
+    pub key: IndexType,
+    pub not_null: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,7 +61,7 @@ pub struct IndexInfo {
     pub id: u64,
     pub name: String,
     pub table_name: String,
-    pub columns: Vec<(String, u64)>,
+    pub columns: Vec<(String, usize)>,
     pub state: TableState,
     pub primary: bool,
     pub unique: bool,
@@ -58,5 +75,165 @@ impl TableInfo {
             }
         }
         None
+    }
+
+    pub fn create(
+        name: &ObjectName,
+        column_defs: &Vec<ColumnDef>,
+        constrains: &Vec<TableConstraint>,
+    ) -> MySQLResult<TableInfo> {
+        if name.0.is_empty() {
+            return Err(MySQLError::UnsupportSQL);
+        }
+
+        let table_name = name.0.last().unwrap().value.to_lowercase();
+        let mut table_info = TableInfo {
+            id: 0,
+            name: table_name,
+            columns: vec![],
+            indices: vec![],
+            state: TableState::Public,
+            pk_is_handle: true,
+            auto_inc_id: 0,
+            max_column_id: 0,
+            max_index_id: 0,
+            update_ts: 0,
+        };
+        table_info.build_columns_and_constraints(column_defs, constrains)?;
+        Ok(table_info)
+    }
+
+    pub fn build_columns_and_constraints(
+        &mut self,
+        column_defs: &Vec<ColumnDef>,
+        constrains: &Vec<TableConstraint>,
+    ) -> MySQLResult<()> {
+        let mut constraints = constrains.clone();
+        let mut offset = 0;
+        let mut cols = vec![];
+        for col_def in column_defs {
+            let column = self.build_column(&mut constraints, offset, col_def)?;
+            cols.push(column);
+            offset += 1;
+        }
+        for c in constraints.iter_mut() {
+            match c {
+                TableConstraint::Unique {
+                    is_primary,
+                    columns,
+                    ..
+                } => {
+                    for c in columns {
+                        c.value = c.value.to_lowercase();
+                        let l = cols.len();
+                        for col in cols.iter_mut() {
+                            if col.name == c.value {
+                                if *is_primary {
+                                    col.key = IndexType::Primary;
+                                } else if l > 0 {
+                                    col.key = IndexType::Multiple;
+                                } else {
+                                    col.key = IndexType::Unique;
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => return Err(MySQLError::UnsupportSQL),
+            }
+        }
+        for mut col in cols {
+            self.max_column_id += 1;
+            col.id = self.max_column_id;
+            self.columns.push(Arc::new(col));
+        }
+        for mut constriant in constraints {
+            let mut index_info = self.build_index_info(constriant)?;
+            self.max_index_id += 1;
+            index_info.id = self.max_index_id;
+            self.indices.push(Arc::new(index_info));
+        }
+        // TODO: Check constraints conflict and valid.
+        Ok(())
+    }
+
+    fn build_column(
+        &self,
+        constraints: &mut Vec<TableConstraint>,
+        offset: usize,
+        col_def: &ColumnDef,
+    ) -> MySQLResult<ColumnInfo> {
+        let mut col = ColumnInfo {
+            id: 0,
+            name: col_def.name.value.to_lowercase(),
+            offset,
+            data_type: col_def.data_type.clone(),
+            default_value: vec![],
+            comment: "".to_string(),
+            key: IndexType::None,
+            not_null: false,
+        };
+        for opt in col_def.options.iter() {
+            match opt.option {
+                ColumnOption::Unique { is_primary } => {
+                    col.key = IndexType::Primary;
+                    constraints.push(TableConstraint::Unique {
+                        name: None,
+                        columns: vec![Ident {
+                            value: col_def.name.value.to_lowercase(),
+                            quote_style: None,
+                        }],
+                        is_primary,
+                    });
+                }
+                ColumnOption::NotNull => {
+                    col.not_null = true;
+                }
+                _ => {
+                    // TODO: support unique constraint in column define
+                }
+            }
+        }
+        Ok(col)
+    }
+
+    fn build_index_info(&self, constraint: TableConstraint) -> MySQLResult<IndexInfo> {
+        let mut index_info = IndexInfo {
+            id: 0,
+            name: "".to_string(),
+            table_name: self.name.clone(),
+            columns: vec![],
+            state: TableState::Tombstone,
+            primary: false,
+            unique: false,
+        };
+        match constraint {
+            TableConstraint::Unique {
+                is_primary,
+                columns,
+                name,
+            } => {
+                if let Some(name) = name {
+                    index_info.name = name.value.to_lowercase();
+                }
+                for key in columns {
+                    let mut index_col = self.columns[0].clone();
+                    for col in self.columns.iter() {
+                        if col.name == key.value {
+                            index_col = col.clone();
+                            break;
+                        }
+                    }
+                    if index_col.name != key.value {
+                        return Err(MySQLError::NoColumn);
+                    }
+                    index_info
+                        .columns
+                        .push((index_col.name.clone(), index_col.offset));
+                }
+            }
+            _ => (),
+        }
+        Ok(index_info)
     }
 }
