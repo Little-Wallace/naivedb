@@ -1,11 +1,15 @@
 use crate::errors::{MySQLError, MySQLResult};
+use crate::expression::Expr;
 use crate::planner::{CreateTablePlan, PlanNode, PointGetPlan};
 use crate::session::SessionRef;
 use crate::table::schema::TableInfo;
+use sqlparser::ast;
 use sqlparser::ast::{ColumnDef, ObjectName, Query, SqlOption, Statement, TableConstraint};
 use sqlparser::dialect::MySqlDialect;
 use sqlparser::parser::Parser;
 use std::sync::Arc;
+
+use super::selection_plan::SelectionPlan;
 
 pub struct PlanBuilder {
     session: SessionRef,
@@ -66,5 +70,25 @@ impl PlanBuilder {
     ) -> MySQLResult<PlanNode> {
         let table_info = TableInfo::create(name, column_defs, constrains)?;
         Ok(PlanNode::CreateTable(CreateTablePlan { table_info }))
+    }
+
+    fn sql_selection_to_plan(&self, selection: &ast::Expr) -> MySQLResult<PlanNode> {
+        let predicate = self.sql_expression_to_expr(selection)?;
+        Ok(PlanNode::Selection(SelectionPlan {
+            predicates: vec![predicate],
+        }))
+    }
+
+    fn sql_expression_to_expr(&self, expr: &ast::Expr) -> MySQLResult<Expr> {
+        match expr {
+            ast::Expr::BinaryOp { left, op, right } => match op {
+                ast::BinaryOperator::Eq => Ok(Expr::Equal {
+                    left: Box::new(self.sql_expression_to_expr(&left)?),
+                    right: Box::new(self.sql_expression_to_expr(&right)?),
+                }),
+                _ => Err(MySQLError::UnsupportSQL),
+            },
+            _ => Err(MySQLError::UnsupportSQL),
+        }
     }
 }
