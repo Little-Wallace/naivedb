@@ -86,7 +86,7 @@ impl EncoderRow {
         }
     }
 
-    pub fn append_columen(
+    pub fn append_column(
         &mut self,
         col: u32,
         value: &EncodeValue,
@@ -148,25 +148,25 @@ mod tests {
         let mut encoder = EncoderRow::new(Vec::new());
         let col1 = b"abc";
         encoder
-            .append_columen(0, &EncodeValue::Int(2), &DataType::Int)
+            .append_column(0, &EncodeValue::Int(2), &DataType::Int)
             .unwrap();
         encoder
-            .append_columen(1, &EncodeValue::NULL, &DataType::Int)
+            .append_column(1, &EncodeValue::NULL, &DataType::Int)
             .unwrap();
         encoder
-            .append_columen(2, &EncodeValue::NULL, &DataType::Int)
+            .append_column(2, &EncodeValue::NULL, &DataType::Int)
             .unwrap();
         encoder
-            .append_columen(3, &EncodeValue::NULL, &DataType::Int)
+            .append_column(3, &EncodeValue::NULL, &DataType::Int)
             .unwrap();
         encoder
-            .append_columen(4, &EncodeValue::Bytes(col1.to_vec()), &DataType::String)
+            .append_column(4, &EncodeValue::Bytes(col1.to_vec()), &DataType::String)
             .unwrap();
         encoder
-            .append_columen(5, &EncodeValue::Int(3), &DataType::Int)
+            .append_column(5, &EncodeValue::Int(3), &DataType::Int)
             .unwrap();
         encoder
-            .append_columen(6, &EncodeValue::NULL, &DataType::Int)
+            .append_column(6, &EncodeValue::NULL, &DataType::Int)
             .unwrap();
         let encode_data = encoder.to_bytes().unwrap();
         let row = Row::from_bytes(encode_data).unwrap();

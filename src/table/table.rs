@@ -34,7 +34,7 @@ impl TableSource {
             return Err(MySQLError::KeyExist);
         }
         for i in 0..self.columns.len() {
-            row.append_columen(
+            row.append_column(
                 self.columns[i].id as u32,
                 &values[i],
                 &self.columns[i].data_type,
