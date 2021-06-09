@@ -12,20 +12,20 @@ pub enum TableState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ColumnState {
-    Tombstone,
-    Public,
-    WriteOnly,
-    ReadOnly,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IndexType {
     None,
     Primary,
-    Multiple,
+    MultipleUnqiue,
     Unique,
+    Index,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DataSchema {
+    pub columns: Vec<Arc<ColumnInfo>>,
+}
+
+pub type DataSchemaRef = Arc<DataSchema>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TableInfo {
@@ -128,7 +128,7 @@ impl TableInfo {
                                 if *is_primary {
                                     col.key = IndexType::Primary;
                                 } else if l > 0 {
-                                    col.key = IndexType::Multiple;
+                                    col.key = IndexType::MultipleUnqiue;
                                 } else {
                                     col.key = IndexType::Unique;
                                 }
@@ -144,7 +144,7 @@ impl TableInfo {
             col.id = self.max_column_id;
             self.columns.push(Arc::new(col));
         }
-        for mut constriant in constraints {
+        for constriant in constraints {
             let mut index_info = self.build_index_info(constriant)?;
             self.max_index_id += 1;
             index_info.id = self.max_index_id;
@@ -206,9 +206,9 @@ impl TableInfo {
         };
         match constraint {
             TableConstraint::Unique {
-                is_primary,
                 columns,
                 name,
+                ..
             } => {
                 if let Some(name) = name {
                     index_info.name = name.value.to_lowercase();

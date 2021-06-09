@@ -3,27 +3,76 @@ use crate::common::EncodeValue;
 use crate::errors::MySQLError;
 use crate::errors::MySQLResult;
 use crate::table::decoder::{encode_value, get_handle_from_record_key, EncoderRow};
-use async_trait::async_trait;
+use crate::transaction::TransactionContext;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use sqlparser::ast::Value;
+use std::collections::HashMap;
 use std::sync::Arc;
-
-#[async_trait]
-pub trait TransactionWriter {
-    async fn check_constants(&self, key: &[u8]) -> MySQLResult<bool>;
-    async fn write(&mut self, key: &[u8], value: &[u8]) -> MySQLResult<()>;
-    async fn commit(&mut self) -> MySQLResult<()>;
-}
 
 pub struct TableSource {
     id: u64,
-    meta: TableInfo,
-    columns: Vec<Arc<ColumnInfo>>,
-    indices: Vec<Arc<IndexInfo>>,
+    meta: Arc<TableInfo>,
+    column_map: HashMap<String, Arc<ColumnInfo>>,
+    unique_index_map: HashMap<String, Arc<IndexInfo>>,
 }
 
 impl TableSource {
-    pub async fn add_record<W: TransactionWriter>(
+    pub fn new(table: Arc<TableInfo>) -> TableSource {
+        let mut column_map = HashMap::default();
+        let mut unique_index_map = HashMap::default();
+        for c in table.columns.iter() {
+            column_map.insert(c.name.clone(), c.clone());
+        }
+        for i in table.indices.iter() {
+            if (i.unique || i.primary) && i.columns.len() == 1 {
+                unique_index_map.insert(i.columns.first().unwrap().0.clone(), i.clone());
+            }
+        }
+        TableSource {
+            id: table.id,
+            meta: table,
+            column_map,
+            unique_index_map,
+        }
+    }
+
+    pub fn get_column(&self, name: &String) -> Option<Arc<ColumnInfo>> {
+        self.column_map.get(name).map(|col| col.clone())
+    }
+
+    pub fn get_index(&self, name: &String) -> Option<Arc<IndexInfo>> {
+        self.unique_index_map.get(name).map(|col| col.clone())
+    }
+
+    pub async fn read_record<W: TransactionContext>(
+        &self,
+        reader: &mut W,
+        select_cols: &DataSchema,
+        primary: &EncodeValue,
+    ) -> MySQLResult<Vec<EncodeValue>> {
+        Ok(vec![])
+    }
+
+    pub async fn read_record_by_index<W: TransactionContext>(
+        &self,
+        reader: &mut W,
+        primary_info: &IndexInfo,
+        select_cols: &DataSchema,
+        primary: &EncodeValue,
+    ) -> MySQLResult<Vec<EncodeValue>> {
+        Ok(vec![])
+    }
+
+    pub async fn read_handle_from_index<W: TransactionContext>(
+        &self,
+        reader: &mut W,
+        index_info: &IndexInfo,
+        index: &EncodeValue,
+    ) -> MySQLResult<Option<EncodeValue>> {
+        Ok(None)
+    }
+
+    pub async fn add_record<W: TransactionContext>(
         &self,
         writer: &mut W,
         row: &mut EncoderRow,
@@ -33,20 +82,21 @@ impl TableSource {
         if writer.check_constants(&key).await? {
             return Err(MySQLError::KeyExist);
         }
-        for i in 0..self.columns.len() {
+        for i in 0..self.meta.columns.len() {
             row.append_columen(
-                self.columns[i].id as u32,
+                self.meta.columns[i].id as u32,
                 &values[i],
-                &self.columns[i].data_type,
+                &self.meta.columns[i].data_type,
             )?;
         }
         let handle = get_handle_from_record_key(&key);
 
-        for index in self.indices.iter() {
+        let mut index_key = Vec::with_capacity(self.get_handle_size());
+        for index in self.meta.indices.iter() {
             if index.primary {
                 continue;
             }
-            let mut index_key = Vec::with_capacity(self.get_handle_size());
+            index_key.clear();
             index_key.push(b't');
             index_key.write_u64::<LittleEndian>(self.id)?;
             index_key.push(b'i');

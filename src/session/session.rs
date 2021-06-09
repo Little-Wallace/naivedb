@@ -1,4 +1,5 @@
 use crate::errors::{MySQLError, MySQLResult};
+use crate::store::Transaction;
 use crate::table::table::TableSource;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
@@ -7,6 +8,7 @@ pub struct Session {
     cache: HashMap<String, Arc<TableSource>>,
     tables: Arc<RwLock<HashMap<String, Arc<TableSource>>>>,
     db: String,
+    transaction: Option<Box<dyn Transaction>>,
 }
 
 pub type SessionRef = Arc<Mutex<Session>>;
@@ -17,7 +19,21 @@ impl Session {
             tables,
             cache: HashMap::default(),
             db: "".to_string(),
+            transaction: None,
         }
+    }
+
+    pub fn take_transaction(&mut self) -> Option<Box<dyn Transaction>> {
+        self.transaction.take()
+    }
+
+    pub fn set_transaction(&mut self, txn: Box<dyn Transaction>) {
+        self.transaction = Some(txn)
+    }
+
+    pub fn add_table(&mut self, name: String, table: Arc<TableSource>) {
+        let mut tables = self.tables.write().unwrap();
+        tables.insert(name, table);
     }
 
     pub fn get_table(&mut self, name: &String) -> Option<Arc<TableSource>> {
@@ -35,5 +51,9 @@ impl Session {
         self.db = name;
         // TODO: get db info
         Ok(())
+    }
+
+    pub fn get_db(&self) -> &String {
+        &self.db
     }
 }
