@@ -9,6 +9,7 @@ pub struct Session {
     tables: Arc<RwLock<HashMap<String, Arc<TableSource>>>>,
     db: String,
     transaction: Option<Box<dyn Transaction>>,
+    pub is_in_txn: bool,
 }
 
 pub type SessionRef = Arc<Mutex<Session>>;
@@ -20,6 +21,7 @@ impl Session {
             cache: HashMap::default(),
             db: "".to_string(),
             transaction: None,
+            is_in_txn: false,
         }
     }
 

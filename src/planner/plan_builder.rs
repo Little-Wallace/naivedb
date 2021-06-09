@@ -1,12 +1,13 @@
 use crate::errors::{MySQLError, MySQLResult};
 use crate::planner::point_get_plan::QueryPlanBuilder;
-use crate::planner::{CreateTablePlan, PlanNode, PointGetPlan, SelectPlan};
+use crate::planner::{CreateTablePlan, PlanNode, PointGetPlan, SelectPlan, InsertPlan};
 use crate::session::SessionRef;
-use crate::table::schema::TableInfo;
-use sqlparser::ast::{ColumnDef, Ident, ObjectName, Query, SqlOption, Statement, TableConstraint};
+use crate::table::schema::{TableInfo, DataSchema};
+use sqlparser::ast::{ColumnDef, Expr, Ident, ObjectName, Query, SqlOption, Statement, TableConstraint};
 use sqlparser::dialect::MySqlDialect;
 use sqlparser::parser::Parser;
 use std::sync::Arc;
+use crate::common::EncodeValue;
 
 pub struct PlanBuilder {
     session: SessionRef,
@@ -85,9 +86,51 @@ impl PlanBuilder {
     fn sql_insert_to_plan(
         &self,
         table_name: &ObjectName,
-        columns: &[Ident],
+        cols: &[Ident],
         source: &Query,
     ) -> MySQLResult<PlanNode> {
-        Ok(PlanNode::Select(SelectPlan{}))
+        let table_name = table_name.0.last().unwrap().value.to_lowercase();
+        let table = match self.session.lock().unwrap().get_table(&table_name) {
+            Some(t) => t,
+            None => return Err(MySQLError::NoTable),
+        };
+        let mut columns = vec![];
+        for col_name in cols {
+            let col_name = col_name.value.to_lowercase();
+            let col = match table.get_column(&col_name) {
+                Some(col) => col,
+                None => return Err(MySQLError::NoColumn),
+            };
+            columns.push(col);
+        }
+        match &source.body {
+            sqlparser::ast::SetExpr::Values(values) => {
+                let mut ec_values = vec![];
+                for value in values.0.iter() {
+                    if value.len() != cols.len() {
+                        return Err(MySQLError::ColumnMissMatch);
+                    }
+                    let mut row = vec![];
+                    for e in value.iter() {
+                        match e {
+                            Expr::Value(v) => {
+                                row.push(EncodeValue::from_parse_value(v.clone())?);
+                            },
+                            _ => return Err(MySQLError::UnsupportSQL),
+                        }
+                    }
+                    ec_values.push(row);
+                }
+                Ok(PlanNode::Insert(InsertPlan{
+                    table,
+                    values: ec_values,
+                    schema: DataSchema{ columns },
+                    session: self.session.clone(),
+                }))
+            },
+            _ => {
+                Err(MySQLError::UnsupportSQL)
+            }
+        }
     }
 }

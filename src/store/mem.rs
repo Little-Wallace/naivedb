@@ -11,6 +11,16 @@ pub struct MemStorage {
     last_commit_ts: AtomicU64,
 }
 
+
+impl MemStorage {
+    pub fn new() -> MemStorage {
+        MemStorage {
+            last_commit_ts: AtomicU64::new(1),
+            data: Arc::new(Mutex::new(BTreeMap::new())),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Operation {
     Delete(u64),

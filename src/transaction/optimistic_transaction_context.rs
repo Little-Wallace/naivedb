@@ -1,9 +1,7 @@
 
 use crate::errors::MySQLResult;
-use crate::session::SessionRef;
-use crate::store::{Storage, Transaction, TransactionOptions};
+use crate::store::{Storage, Transaction};
 use crate::transaction::TransactionContext;
-use async_trait::async_trait;
 use std::sync::Arc;
 
 pub struct OptimisticTransactionContext {
@@ -13,8 +11,12 @@ pub struct OptimisticTransactionContext {
 impl OptimisticTransactionContext {
     pub fn new(txn: Box<dyn Transaction>) -> OptimisticTransactionContext {
         OptimisticTransactionContext {
-            txn
+            txn,
         }
+    }
+
+    pub fn take_transaction(self) -> Box<dyn Transaction> {
+        self.txn
     }
 }
 

@@ -136,7 +136,8 @@ impl EncodeValue {
             }
         }
     }
-    pub fn read_from(input: &mut &[u8], column_type: DataType) -> io::Result<EncodeValue> {
+
+    pub fn read_from(input: &mut &[u8], column_type: &DataType) -> io::Result<EncodeValue> {
         match column_type {
             DataType::SmallInt => Ok(EncodeValue::Int(input.read_i16::<LE>()?.into())),
             DataType::Int => Ok(EncodeValue::Int(input.read_i32::<LE>()?.into())),
@@ -217,6 +218,20 @@ impl EncodeValue {
                 io::ErrorKind::InvalidInput,
                 "invalid column type",
             )),
+        }
+    }
+}
+
+impl From<EncodeValue> for String {
+    fn from(v: EncodeValue) -> Self {
+        match v {
+            EncodeValue::NULL=> "NULL".to_string(),
+            EncodeValue::Bytes(v) => String::from_utf8(v).unwrap(),
+            EncodeValue::Int(v)=> v.to_string(),
+            EncodeValue::Float(v) => v.to_string(),
+            EncodeValue::Double(v) => v.to_string(),
+            EncodeValue::Date(year, month, day, hour, min, sec, micro) => format!("{}-{}-{} {}:{}:{}.{}", year, month, day, hour, min, sec, micro),
+            EncodeValue::Time(_, day, hour, min, sec, micro) => format!("{}d {}:{}:{}.{}", day, hour, min, sec, micro)
         }
     }
 }

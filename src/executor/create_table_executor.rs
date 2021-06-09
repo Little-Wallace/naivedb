@@ -26,3 +26,15 @@ impl Executor for CreateTableExecutor {
         Ok(vec![])
     }
 }
+
+
+impl CreateTableExecutor {
+    pub fn new(
+        plan: CreateTablePlan,
+        session: SessionRef) -> Self {
+        Self {
+            plan,
+            session,
+        }
+    }
+}

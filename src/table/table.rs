@@ -2,10 +2,9 @@ use super::schema::*;
 use crate::common::EncodeValue;
 use crate::errors::MySQLError;
 use crate::errors::MySQLResult;
-use crate::table::decoder::{encode_value, get_handle_from_record_key, EncoderRow};
+use crate::table::decoder::{encode_value, get_handle_from_record_key, EncoderRow, Row};
 use crate::transaction::TransactionContext;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-use sqlparser::ast::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -48,9 +47,12 @@ impl TableSource {
         &self,
         reader: &mut W,
         select_cols: &DataSchema,
-        primary: &EncodeValue,
+        handle: &EncodeValue,
     ) -> MySQLResult<Vec<EncodeValue>> {
-        Ok(vec![])
+        if let Some(primary_info) = self.meta.get_primary_index() {
+            return self.read_record_by_index(reader, primary_info.as_ref(), select_cols, handle).await;
+        }
+        Err(MySQLError::NoIndex)
     }
 
     pub async fn read_record_by_index<W: TransactionContext>(
@@ -58,8 +60,27 @@ impl TableSource {
         reader: &mut W,
         primary_info: &IndexInfo,
         select_cols: &DataSchema,
-        primary: &EncodeValue,
+        handle: &EncodeValue,
     ) -> MySQLResult<Vec<EncodeValue>> {
+        let key = self.get_record_by_handle(primary_info, handle)?;
+        let value = reader.get(&key).await?;
+        match value {
+            Some(v) => {
+                let row = Row::from_bytes(v)?;
+                let mut result = vec![];
+                for col in select_cols.columns.iter() {
+                    match row.get_data(col.id as u32) {
+                        Some(Some(mut v)) => {
+                            result.push(EncodeValue::read_from(&mut v, &col.data_type)?);
+                        },
+                        _ => result.push(EncodeValue::NULL),
+                    }
+                }
+            },
+            None => {
+                return Ok(vec![]);
+            }
+        }
         Ok(vec![])
     }
 
@@ -69,7 +90,15 @@ impl TableSource {
         index_info: &IndexInfo,
         index: &EncodeValue,
     ) -> MySQLResult<Option<EncodeValue>> {
-        Ok(None)
+        let mut index_key = Vec::with_capacity(self.get_handle_size());
+        self.encode_index_key(&mut index_key, index_info, &[index.clone()])?;
+        match reader.get(&index_key).await? {
+            None => Ok(None),
+            Some(v) => {
+                let col = self.meta.columns[index_info.columns[0].1].as_ref();
+                Ok(Some(EncodeValue::read_from(&mut v.as_ref(), &col.data_type)?))
+            }
+        }
     }
 
     pub async fn add_record<W: TransactionContext>(
@@ -96,14 +125,7 @@ impl TableSource {
             if index.primary {
                 continue;
             }
-            index_key.clear();
-            index_key.push(b't');
-            index_key.write_u64::<LittleEndian>(self.id)?;
-            index_key.push(b'i');
-            for (_, offset) in index.columns.iter() {
-                let col = self.meta.columns[*offset as usize].clone();
-                encode_value(&mut index_key, &values[col.offset], &col.data_type)?;
-            }
+            self.encode_index_key(&mut index_key, index.as_ref(), &values)?;
             writer.write(&index_key, handle).await?;
         }
 
@@ -111,6 +133,16 @@ impl TableSource {
         row.clear();
         writer.write(&key, &value).await?;
         Ok(handle.to_vec())
+    }
+
+    fn get_record_by_handle(&self, info: &IndexInfo, handle: &EncodeValue) -> MySQLResult<Vec<u8>> {
+        let mut key = Vec::with_capacity(self.get_handle_size());
+        key.push(b't');
+        key.write_u64::<LittleEndian>(self.id)?;
+        key.push(b'r');
+        let col = self.meta.columns[info.columns[0].1].as_ref();
+        encode_value(&mut key, handle, &col.data_type)?;
+        Ok(key)
     }
 
     fn get_record_key(&self, values: &[EncodeValue]) -> MySQLResult<Vec<u8>> {
@@ -128,7 +160,21 @@ impl TableSource {
         Err(MySQLError::NoIndex)
     }
 
+    fn encode_index_key(&self, index_key: &mut Vec<u8>, index_info: &IndexInfo,values: &[EncodeValue]) -> MySQLResult<()> {
+        index_key.clear();
+        index_key.push(b't');
+        index_key.write_u64::<LittleEndian>(self.id)?;
+        index_key.push(b'i');
+        for (_, offset) in index_info.columns.iter() {
+            let col = self.meta.columns[*offset as usize].clone();
+            encode_value(index_key, &values[col.offset], &col.data_type)?;
+        }
+        Ok(())
+    }
+
     fn get_handle_size(&self) -> usize {
         64
     }
 }
+
+

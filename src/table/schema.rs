@@ -1,6 +1,7 @@
 use crate::errors::{MySQLError, MySQLResult};
 use sqlparser::ast::DataType;
 use sqlparser::ast::{ColumnDef, ColumnOption, Ident, ObjectName, TableConstraint};
+use msql_srv::{Column, ColumnType, ColumnFlags};
 use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -232,5 +233,36 @@ impl TableInfo {
             _ => (),
         }
         Ok(index_info)
+    }
+}
+
+
+impl ColumnInfo {
+    pub fn to_mysql_column(&self) -> MySQLResult<Column> {
+        let tp = match &self.data_type {
+            DataType::Char(size) =>
+                ColumnType::MYSQL_TYPE_VARCHAR,
+            DataType::Varchar(size) =>
+                ColumnType::MYSQL_TYPE_VARCHAR,
+            DataType::Decimal(_, _) => ColumnType::MYSQL_TYPE_DECIMAL,
+            DataType::Float(size) => ColumnType::MYSQL_TYPE_FLOAT,
+            DataType::SmallInt => ColumnType::MYSQL_TYPE_SHORT,
+            DataType::Int => ColumnType::MYSQL_TYPE_LONG,
+            DataType::BigInt => ColumnType::MYSQL_TYPE_LONG,
+            DataType::Double =>
+                ColumnType::MYSQL_TYPE_FLOAT,
+            DataType::Boolean => ColumnType::MYSQL_TYPE_SHORT,
+            DataType::Text =>
+                ColumnType::MYSQL_TYPE_VARCHAR,
+            DataType::String =>
+                ColumnType::MYSQL_TYPE_VAR_STRING,
+            _ => return Err(MySQLError::UnsupportSQL),
+        };
+        Ok(Column {
+            table: "".to_string(),
+            column: self.name.clone(),
+            coltype: tp,
+            colflags: ColumnFlags::empty(),
+        })
     }
 }

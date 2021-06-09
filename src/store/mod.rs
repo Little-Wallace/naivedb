@@ -2,6 +2,7 @@ use crate::errors::MySQLResult;
 use async_trait::async_trait;
 
 mod mem;
+pub use mem::MemStorage;
 
 pub struct TransactionOptions {
     pub pessimistic: bool,

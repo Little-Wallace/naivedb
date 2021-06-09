@@ -1,5 +1,4 @@
 use crate::errors::MySQLResult;
-use crate::session::SessionRef;
 use crate::store::{Storage, Transaction, TransactionOptions};
 use crate::transaction::TransactionContext;
 use async_trait::async_trait;

@@ -9,7 +9,6 @@ use crate::store::Storage;
 
 pub struct InsertExecutor {
     storage: Arc<dyn Storage>,
-    session: SessionRef,
     plan: InsertPlan,
 }
 
@@ -20,6 +19,19 @@ impl Executor for InsertExecutor {
     }
 
     async fn execute(&mut self) -> MySQLResult<SendableDataBlockStream> {
+
         Ok(vec![])
+    }
+}
+
+impl InsertExecutor {
+    pub fn new(
+        plan: InsertPlan,
+        storage: Arc<dyn Storage>,
+    ) -> InsertExecutor {
+        InsertExecutor {
+            storage,
+            plan,
+        }
     }
 }

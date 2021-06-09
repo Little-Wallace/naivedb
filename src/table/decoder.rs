@@ -176,10 +176,10 @@ mod tests {
         assert_eq!(row.get_data(6), Some(None));
         assert_eq!(row.get_data(7), None);
         let mut col0 = row.get_data(0).unwrap().unwrap();
-        let col_val = EncodeValue::read_from(&mut col0, DataType::Int).unwrap();
+        let col_val = EncodeValue::read_from(&mut col0, &DataType::Int).unwrap();
         assert_eq!(col_val, EncodeValue::Int(2));
         let mut col4 = row.get_data(4).unwrap().unwrap();
-        let col_val = EncodeValue::read_from(&mut col4, DataType::String).unwrap();
+        let col_val = EncodeValue::read_from(&mut col4, &DataType::String).unwrap();
         assert_eq!(col_val, EncodeValue::Bytes(col1.to_vec()));
     }
 }

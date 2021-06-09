@@ -24,6 +24,9 @@ pub enum MySQLError {
     #[error("column not exist")]
     NoColumn,
 
+    #[error("column not match values")]
+    ColumnMissMatch,
+
     #[error("table not exist")]
     NoTable,
 
