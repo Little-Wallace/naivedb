@@ -83,7 +83,7 @@ impl TableSource {
             return Err(MySQLError::KeyExist);
         }
         for i in 0..self.meta.columns.len() {
-            row.append_columen(
+            row.append_column(
                 self.meta.columns[i].id as u32,
                 &values[i],
                 &self.meta.columns[i].data_type,
