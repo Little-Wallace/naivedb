@@ -781,6 +781,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "byteorder",
+ "futures",
  "msql-srv",
  "mysql",
  "mysql_common 0.22.2",

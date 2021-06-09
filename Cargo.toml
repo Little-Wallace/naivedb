@@ -18,3 +18,4 @@ mysql = "*"
 tokio = { version = "0.2", features = ["full"] }
 async-trait = "0.1"
 thiserror = "1.0"
+futures = "0.3"

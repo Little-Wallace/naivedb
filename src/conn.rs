@@ -85,6 +85,7 @@ impl MysqlShim for MysqlConnection {
         query: &str,
         results: QueryResultWriter<'_>,
     ) -> Result<(), Self::Error> {
+        println!("on_query");
         let plan_builder = PlanBuilder::create(self.session.clone());
         let plan = plan_builder.build_from_sql(query)?;
         results.completed(0, 0).await?;

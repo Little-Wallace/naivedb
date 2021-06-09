@@ -24,6 +24,12 @@ pub enum MySQLError {
     #[error("column not exist")]
     NoColumn,
 
+    #[error("table not exist")]
+    NoTable,
+
+    #[error("DB not exist")]
+    NoDB,
+
     #[error("unsupported sql")]
     UnsupportSQL,
 }

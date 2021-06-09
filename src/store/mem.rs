@@ -1,45 +1,55 @@
 use crate::errors::MySQLResult;
-use crate::store::{Storage, Transaction};
+use crate::store::{Storage, Transaction, TransactionOptions};
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
+use std::sync::atomic::{AtomicU64, Ordering};
+
 pub struct MemStorage {
-    data: Arc<Mutex<BTreeMap<Vec<u8>, Vec<u8>>>>,
+    data: Arc<Mutex<BTreeMap<Vec<u8>, Vec<Operation>>>>,
+    last_commit_ts: AtomicU64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Operation {
+    Delete(u64),
+    Put(Vec<u8>, u64),
 }
 
 pub struct MemTransaction {
-    data: Arc<Mutex<BTreeMap<Vec<u8>, Vec<u8>>>>,
-    cache: BTreeMap<Vec<u8>, Vec<u8>>,
+    data: Arc<Mutex<BTreeMap<Vec<u8>, Vec<Operation>>>>,
+    cache: BTreeMap<Vec<u8>, Operation>,
+    start_ts: u64,
 }
 
 impl MemTransaction {
-    pub fn new(data: Arc<Mutex<BTreeMap<Vec<u8>, Vec<u8>>>>) -> MemTransaction {
+    pub fn new(data: Arc<Mutex<BTreeMap<Vec<u8>, Vec<Operation>>>>, start_ts: u64) -> MemTransaction {
         MemTransaction {
             data,
             cache: BTreeMap::default(),
+            start_ts,
         }
     }
 }
 
 #[async_trait]
 impl Storage for MemStorage {
-    type Txn = MemTransaction;
-
-    async fn insert(&self, key: &[u8], value: &[u8]) -> MySQLResult<()> {
-        self.data
-            .lock()
-            .unwrap()
-            .insert(key.to_vec(), value.to_vec());
-        Ok(())
-    }
-
     async fn get(&self, key: &[u8]) -> MySQLResult<Option<Vec<u8>>> {
-        Ok(self.data.lock().unwrap().get(key).map(|v| v.clone()))
+        let data =  self.data.lock().unwrap();
+        let ops = data.get(key);
+        if let Some(values) = ops {
+            match values.first() {
+                Some(Operation::Put(v, _)) => return Ok(Some(v.clone())),
+                _ => (),
+            }
+        }
+        Ok(None)
     }
 
-    fn new_transaction(&self) -> MySQLResult<Self::Txn> {
-        Ok(MemTransaction::new(self.data.clone()))
+    fn new_transaction(&self, _: &TransactionOptions) -> MySQLResult<Box<dyn Transaction>> {
+        let start_ts = self.last_commit_ts.load(Ordering::Acquire);
+        Ok(Box::new(MemTransaction::new(self.data.clone(), start_ts)))
     }
 }
 
@@ -50,27 +60,52 @@ impl Transaction for MemTransaction {
     }
 
     async fn put(&mut self, key: &[u8], value: &[u8]) -> MySQLResult<()> {
-        self.data
-            .lock()
-            .unwrap()
-            .insert(key.to_vec(), value.to_vec());
+        self.cache.insert(key.to_vec(), Operation::Put(value.to_vec(), self.start_ts));
         Ok(())
     }
 
     async fn delete(&mut self, key: &[u8]) -> MySQLResult<()> {
-        self.data.lock().unwrap().remove(key);
+        self.cache.insert(key.to_vec(), Operation::Delete(self.start_ts));
         Ok(())
     }
 
     async fn get(&mut self, key: &[u8]) -> MySQLResult<Option<Vec<u8>>> {
-        Ok(self.data.lock().unwrap().get(key).map(|v| v.clone()))
+        if let Some(value) = self.cache.get(key) {
+            if let Operation::Put(v, _) = value {
+                return Ok(Some(v.clone()));
+            } else {
+                return Ok(None);
+            }
+        }
+        let data = self.data.lock().unwrap();
+        if let Some(values) = data.get(key) {
+            if values.is_empty() {
+                return Ok(None);
+            }
+            let idx = values.len();
+            while idx > 0 {
+                match &values[idx - 1] {
+                    Operation::Put(v, ts) => {
+                        if *ts <= self.start_ts {
+                            return Ok(Some(v.clone()));
+                        }
+                    },
+                    Operation::Delete(ts) => {
+                        if *ts <= self.start_ts {
+                            return Ok(None);
+                        }
+                    }
+                }
+            }
+        }
+        Ok(None)
     }
 
-    async fn scan(&mut self, start: &[u8], end: &[u8]) -> MySQLResult<Vec<Vec<u8>>> {
+    async fn scan(&mut self, _start: &[u8], _end: &[u8]) -> MySQLResult<Vec<Vec<u8>>> {
         Ok(vec![])
     }
 
     fn get_start_time(&self) -> Option<u64> {
-        None
+        Some(self.start_ts)
     }
 }
