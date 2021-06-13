@@ -1,0 +1,16 @@
+[package]
+name = "naivedb-server"
+version = "0.1.0"
+authors = ["Little-Wallace <bupt2013211450@gmail.com>"]
+edition = "2018"
+
+[[bin]]
+name = "naivedb"
+path = "src/naivedb-server.rs"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[dependencies]
+clap = "2.32"
+toml = "0.5"
+naive-sql = { path = ".." }
+tokio = { version = "0.2", features = ["full"] }

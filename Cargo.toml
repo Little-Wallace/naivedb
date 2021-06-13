@@ -4,10 +4,6 @@ version = "0.1.0"
 authors = ["Little-Wallace <bupt2013211450@gmail.com>"]
 edition = "2018"
 
-[[bin]]
-name = "naivedb"
-path = "src/main.rs"
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
 sqlparser = "0.9"
@@ -19,3 +15,13 @@ tokio = { version = "0.2", features = ["full"] }
 async-trait = "0.1"
 thiserror = "1.0"
 futures = "0.3"
+
+[workspace]
+# See https://github.com/rust-lang/rfcs/blob/master/text/2957-cargo-features2.md
+# Without resolver = 2, using `cargo build --features x` to build `cmd`
+# will _not_ propagate the feature `x` into `cmd`'s direct dependencies.
+resolver = "2"
+members = [
+"cmd"
+]
+default-members = ["cmd"]

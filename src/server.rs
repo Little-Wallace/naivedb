@@ -7,18 +7,20 @@ use tokio::stream::StreamExt;
 
 pub struct Server {
     core: Arc<MysqlServerCore>,
+    address: String,
 }
 
 impl Server {
-    pub fn create() -> Server {
+    pub fn new(address: String) -> Server {
         let core = Arc::new(MysqlServerCore::new());
-        Server { core }
+        Server { core, address }
     }
 
     pub async fn start(&self) -> io::Result<()> {
         let core = self.core.clone();
+        let address = self.address.clone();
         let _ = tokio::spawn(async move {
-            let mut listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let mut listener = tokio::net::TcpListener::bind(address.as_str()).await.unwrap();
             let port = listener.local_addr().unwrap().port();
             println!("listening on port: {}", port);
             let mut incoming = listener.incoming();

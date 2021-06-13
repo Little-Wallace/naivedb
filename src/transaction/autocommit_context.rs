@@ -16,7 +16,7 @@ impl AutoCommitContext {
 #[async_trait::async_trait]
 impl TransactionContext for AutoCommitContext {
     async fn check_constants(&mut self, _key: &[u8]) -> MySQLResult<bool> {
-        Ok(true)
+        Ok(false)
     }
 
     async fn write(&mut self, key: &[u8], value: &[u8]) -> MySQLResult<()> {

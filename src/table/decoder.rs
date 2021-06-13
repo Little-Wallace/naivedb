@@ -102,7 +102,7 @@ impl EncoderRow {
     }
 
     pub fn to_bytes(&mut self) -> io::Result<&[u8]> {
-        self.buf.copy_from_slice(ROW_HEADER);
+        self.buf.extend_from_slice(ROW_HEADER);
         self.buf.write_u16::<LittleEndian>(self.cols.len() as u16)?;
         self.buf
             .write_u16::<LittleEndian>(self.null_cols.len() as u16)?;

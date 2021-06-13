@@ -113,24 +113,34 @@ impl TableSource {
         vcols: &[Arc<ColumnInfo>],
         values: Vec<EncodeValue>,
     ) -> MySQLResult<Vec<u8>> {
-        let key = self.get_record_key(&values)?;
-        if writer.check_constants(&key).await? {
-            return Err(MySQLError::KeyExist);
-        }
-        let mut offsets = vec![self.meta.columns.len(), self.meta.columns.len()];
+        let mut offsets = vec![values.len(); self.meta.columns.len()];
         for i in 0..vcols.len() {
             offsets[vcols[i].offset] = i;
         }
+        let mut default_values = vec![];
+        for col in self.meta.columns.iter() {
+            let idx = offsets[col.offset];
+            if idx >= values.len() {
+                if let Some(generator) = col.default_value.as_ref() {
+                    offsets[col.offset] = values.len() + default_values.len();
+                    default_values.push(generator.generate());
+                } else {
+                    return Err(MySQLError::MissColumn(format!("Miss column {}", col.name)));
+                }
+            }
+        }
+
+        let key = self.get_record_key(&values, &default_values, &offsets)?;
+        if writer.check_constants(&key).await? {
+            return Err(MySQLError::KeyExist);
+        }
+
         for col in self.meta.columns.iter() {
             let idx = offsets[col.offset];
             if idx < values.len() {
                 row.append_column(col.id as u32, &values[idx], &col.data_type)?;
             } else {
-                if let Some(generator) = col.default_value.as_ref() {
-                    row.append_column(col.id as u32, &generator.generate(), &col.data_type)?;
-                } else {
-                    return Err(MySQLError::MissColumn(format!("Miss column {}", col.name)));
-                }
+                row.append_column(col.id as u32, &default_values[idx - values.len()], &col.data_type)?;
             }
         }
 
@@ -143,6 +153,7 @@ impl TableSource {
             }
             self.encode_index_key(&mut index_key, index.as_ref(), &values)?;
             writer.write(&index_key, handle).await?;
+            index_key.clear();
         }
 
         let value = row.to_bytes()?;
@@ -160,7 +171,10 @@ impl TableSource {
         Ok(key)
     }
 
-    fn get_record_key(&self, values: &[EncodeValue]) -> MySQLResult<Vec<u8>> {
+    fn get_record_key(&self,
+                      values: &[EncodeValue],
+                      default_values: &[EncodeValue],
+                      offsets: &[usize]) -> MySQLResult<Vec<u8>> {
         if let Some(pk_index) = self.meta.get_primary_index() {
             let mut key = Vec::with_capacity(self.get_handle_size());
             key.push(b't');
@@ -168,10 +182,16 @@ impl TableSource {
             key.push(b'r');
             for (_, offset) in pk_index.columns.iter() {
                 let col = self.meta.columns[*offset as usize].clone();
-                encode_value(&mut key, &values[col.offset], &col.data_type)?;
+                let idx = offsets[col.offset];
+                if idx < values.len() {
+                    encode_value(&mut key, &values[idx], &col.data_type)?;
+                } else {
+                    encode_value(&mut key, &default_values[idx - values.len()], &col.data_type)?;
+                }
             }
             return Ok(key);
         }
+        println!("no index key");
         Err(MySQLError::NoIndex)
     }
 

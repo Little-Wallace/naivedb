@@ -79,7 +79,7 @@ pub struct DataSchema {
 
 pub type DataSchemaRef = Arc<DataSchema>;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct TableInfo {
     pub id: u64,
     pub name: String,
@@ -264,7 +264,7 @@ impl TableInfo {
                 ColumnOption::DialectSpecific(others) => {
                     for word in others {
                         if let Token::Word(Word{ value, keyword, ..}) = word {
-                            if value.to_lowercase() == "auto_increment" && keyword == keywords::AUTO_INCREMENT {
+                            if value.to_lowercase() == "auto_increment" && *keyword == keywords::Keyword::AUTO_INCREMENT {
                                 col.default_value = Some(Box::new(AutoIncrementIdGenerator::new(self.max_row_id.clone())));
                             }
                         }
@@ -303,10 +303,11 @@ impl TableInfo {
             unique: false,
         };
         match constraint {
-            TableConstraint::Unique { columns, name, .. } => {
+            TableConstraint::Unique { columns, name, is_primary } => {
                 if let Some(name) = name {
                     index_info.name = name.value.to_lowercase();
                 }
+                index_info.primary = is_primary;
                 for key in columns {
                     let mut index_col = self.columns[0].clone();
                     for col in self.columns.iter() {
