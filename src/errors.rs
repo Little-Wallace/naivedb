@@ -24,6 +24,9 @@ pub enum MySQLError {
     #[error("column not exist")]
     NoColumn,
 
+    #[error("miss column {0}")]
+    MissColumn(String),
+
     #[error("column not match values")]
     ColumnMissMatch,
 
@@ -47,5 +50,23 @@ impl From<io::Error> for MySQLError {
 impl From<ParserError> for MySQLError {
     fn from(e: ParserError) -> Self {
         MySQLError::ParseError(e)
+    }
+}
+
+impl From<std::num::ParseIntError> for MySQLError {
+    fn from(e: std::num::ParseIntError) -> Self {
+        MySQLError::ParseError(ParserError::ParserError(format!(
+            "error when parse int: {:?}",
+            e
+        )))
+    }
+}
+
+impl From<std::num::ParseFloatError> for MySQLError {
+    fn from(e: std::num::ParseFloatError) -> Self {
+        MySQLError::ParseError(ParserError::ParserError(format!(
+            "error when parse flot: {:?}",
+            e
+        )))
     }
 }

@@ -1,8 +1,8 @@
-use crate::common::{SendableDataBlockStream, DataBlock};
+use crate::common::{DataBlock, SendableDataBlockStream};
 use crate::errors::MySQLResult;
 use crate::executor::Executor;
 use crate::planner::PointGetPlan;
-use crate::store::{Storage, TransactionOptions, Transaction};
+use crate::store::{Storage, Transaction, TransactionOptions};
 use crate::transaction::{AutoCommitContext, OptimisticTransactionContext};
 use std::sync::Arc;
 
@@ -18,7 +18,7 @@ impl Executor for PointGetExecutor {
     }
 
     async fn execute(&mut self) -> MySQLResult<SendableDataBlockStream> {
-        let mut transaction = {
+        let transaction = {
             let mut session = self.plan.session.lock().unwrap();
             session.take_transaction()
         };
@@ -37,7 +37,10 @@ impl Executor for PointGetExecutor {
                     )
                     .await?;
                 let schema = self.plan.select_columns.clone();
-                return Ok(vec![DataBlock { schema, data: vec![ret]}]);
+                return Ok(vec![DataBlock {
+                    schema,
+                    data: vec![ret],
+                }]);
             } else {
                 let opts = TransactionOptions {
                     pessimistic: false,
@@ -48,35 +51,37 @@ impl Executor for PointGetExecutor {
         };
         let mut ctx = OptimisticTransactionContext::new(txn);
         let ret = self.execute_transaction(&mut ctx).await;
-        self.plan.session.lock().unwrap().set_transaction(ctx.take_transaction());
+        self.plan
+            .session
+            .lock()
+            .unwrap()
+            .set_transaction(ctx.take_transaction());
         ret
     }
 }
 
 impl PointGetExecutor {
     pub fn new(plan: PointGetPlan, storage: Arc<dyn Storage>) -> PointGetExecutor {
-        PointGetExecutor {
-            plan,
-            storage,
-        }
+        PointGetExecutor { plan, storage }
     }
 
-    async fn execute_transaction(&mut self, ctx: &mut OptimisticTransactionContext) -> MySQLResult<SendableDataBlockStream> {
+    async fn execute_transaction(
+        &mut self,
+        ctx: &mut OptimisticTransactionContext,
+    ) -> MySQLResult<SendableDataBlockStream> {
         let table = self.plan.table.clone();
-        if let Some(handle) = table.read_handle_from_index(
-            ctx,
-            self.plan.index_info.as_ref(),
-            &self.plan.index_value,
-        ).await? {
+        if let Some(handle) = table
+            .read_handle_from_index(ctx, self.plan.index_info.as_ref(), &self.plan.index_value)
+            .await?
+        {
             let ret = table
-                .read_record(
-                    ctx,
-                    self.plan.select_columns.as_ref(),
-                    &handle,
-                )
+                .read_record(ctx, self.plan.select_columns.as_ref(), &handle)
                 .await?;
             let schema = self.plan.select_columns.clone();
-            Ok(vec![DataBlock { schema, data: vec![ret]}])
+            Ok(vec![DataBlock {
+                schema,
+                data: vec![ret],
+            }])
         } else {
             Ok(vec![])
         }

@@ -27,14 +27,8 @@ impl Executor for CreateTableExecutor {
     }
 }
 
-
 impl CreateTableExecutor {
-    pub fn new(
-        plan: CreateTablePlan,
-        session: SessionRef) -> Self {
-        Self {
-            plan,
-            session,
-        }
+    pub fn new(plan: CreateTablePlan, session: SessionRef) -> Self {
+        Self { plan, session }
     }
 }

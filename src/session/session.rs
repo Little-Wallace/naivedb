@@ -1,4 +1,4 @@
-use crate::errors::{MySQLError, MySQLResult};
+use crate::errors::MySQLResult;
 use crate::store::Transaction;
 use crate::table::table::TableSource;
 use std::collections::HashMap;

@@ -2,7 +2,7 @@ use crate::common::EncodeValue;
 use crate::errors::{MySQLError, MySQLResult};
 use crate::planner::plan_expression::Expression;
 use crate::session::{Session, SessionRef};
-use crate::table::schema::{ColumnInfo, IndexInfo, IndexType, TableInfo, DataSchemaRef, DataSchema};
+use crate::table::schema::{ColumnInfo, DataSchema, DataSchemaRef, IndexInfo};
 use crate::table::table::TableSource;
 use sqlparser::ast::{
     BinaryOperator, Expr, Query, Select, SelectItem, SetExpr, Statement, TableFactor,
@@ -48,7 +48,9 @@ impl QueryPlanBuilder {
                 table: self.table.take().unwrap(),
                 index_info: self.index_info.first().unwrap().clone(),
                 index_value: self.index_values.first().unwrap().clone(),
-                select_columns: Arc::new(DataSchema{ columns: self.select_columns}),
+                select_columns: Arc::new(DataSchema {
+                    columns: self.select_columns,
+                }),
                 filters: self.filters,
                 session: self.session.clone(),
             }))
@@ -174,7 +176,7 @@ impl QueryPlanBuilder {
                 self.index_info.push(index);
                 self.index_values.push(value);
             }
-        } else if let Some(col) = table.get_column(&name) {
+        } else if let Some(_col) = table.get_column(&name) {
             // TODO: add it to expression
         } else {
             return Err(MySQLError::NoColumn);

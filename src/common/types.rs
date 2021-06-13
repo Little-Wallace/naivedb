@@ -225,13 +225,18 @@ impl EncodeValue {
 impl From<EncodeValue> for String {
     fn from(v: EncodeValue) -> Self {
         match v {
-            EncodeValue::NULL=> "NULL".to_string(),
+            EncodeValue::NULL => "NULL".to_string(),
             EncodeValue::Bytes(v) => String::from_utf8(v).unwrap(),
-            EncodeValue::Int(v)=> v.to_string(),
+            EncodeValue::Int(v) => v.to_string(),
             EncodeValue::Float(v) => v.to_string(),
             EncodeValue::Double(v) => v.to_string(),
-            EncodeValue::Date(year, month, day, hour, min, sec, micro) => format!("{}-{}-{} {}:{}:{}.{}", year, month, day, hour, min, sec, micro),
-            EncodeValue::Time(_, day, hour, min, sec, micro) => format!("{}d {}:{}:{}.{}", day, hour, min, sec, micro)
+            EncodeValue::Date(year, month, day, hour, min, sec, micro) => format!(
+                "{}-{}-{} {}:{}:{}.{}",
+                year, month, day, hour, min, sec, micro
+            ),
+            EncodeValue::Time(_, day, hour, min, sec, micro) => {
+                format!("{}d {}:{}:{}.{}", day, hour, min, sec, micro)
+            }
         }
     }
 }

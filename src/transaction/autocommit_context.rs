@@ -1,7 +1,6 @@
 use crate::errors::MySQLResult;
-use crate::store::{Storage, Transaction, TransactionOptions};
+use crate::store::{Storage, TransactionOptions};
 use crate::transaction::TransactionContext;
-use async_trait::async_trait;
 use std::sync::Arc;
 
 pub struct AutoCommitContext {
@@ -16,7 +15,7 @@ impl AutoCommitContext {
 
 #[async_trait::async_trait]
 impl TransactionContext for AutoCommitContext {
-    async fn check_constants(&mut self, key: &[u8]) -> MySQLResult<bool> {
+    async fn check_constants(&mut self, _key: &[u8]) -> MySQLResult<bool> {
         Ok(true)
     }
 

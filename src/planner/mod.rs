@@ -5,7 +5,6 @@ mod plan_expression;
 mod point_get_plan;
 mod select_plan;
 
-use crate::errors::MySQLResult;
 pub use create_table_plan::CreateTablePlan;
 pub use insert_plan::InsertPlan;
 pub use plan_builder::PlanBuilder;

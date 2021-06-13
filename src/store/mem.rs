@@ -11,7 +11,6 @@ pub struct MemStorage {
     last_commit_ts: AtomicU64,
 }
 
-
 impl MemStorage {
     pub fn new() -> MemStorage {
         MemStorage {
@@ -34,7 +33,10 @@ pub struct MemTransaction {
 }
 
 impl MemTransaction {
-    pub fn new(data: Arc<Mutex<BTreeMap<Vec<u8>, Vec<Operation>>>>, start_ts: u64) -> MemTransaction {
+    pub fn new(
+        data: Arc<Mutex<BTreeMap<Vec<u8>, Vec<Operation>>>>,
+        start_ts: u64,
+    ) -> MemTransaction {
         MemTransaction {
             data,
             cache: BTreeMap::default(),
@@ -46,7 +48,7 @@ impl MemTransaction {
 #[async_trait]
 impl Storage for MemStorage {
     async fn get(&self, key: &[u8]) -> MySQLResult<Option<Vec<u8>>> {
-        let data =  self.data.lock().unwrap();
+        let data = self.data.lock().unwrap();
         let ops = data.get(key);
         if let Some(values) = ops {
             match values.first() {
@@ -70,12 +72,14 @@ impl Transaction for MemTransaction {
     }
 
     async fn put(&mut self, key: &[u8], value: &[u8]) -> MySQLResult<()> {
-        self.cache.insert(key.to_vec(), Operation::Put(value.to_vec(), self.start_ts));
+        self.cache
+            .insert(key.to_vec(), Operation::Put(value.to_vec(), self.start_ts));
         Ok(())
     }
 
     async fn delete(&mut self, key: &[u8]) -> MySQLResult<()> {
-        self.cache.insert(key.to_vec(), Operation::Delete(self.start_ts));
+        self.cache
+            .insert(key.to_vec(), Operation::Delete(self.start_ts));
         Ok(())
     }
 
@@ -99,7 +103,7 @@ impl Transaction for MemTransaction {
                         if *ts <= self.start_ts {
                             return Ok(Some(v.clone()));
                         }
-                    },
+                    }
                     Operation::Delete(ts) => {
                         if *ts <= self.start_ts {
                             return Ok(None);

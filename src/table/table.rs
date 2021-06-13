@@ -2,9 +2,9 @@ use super::schema::*;
 use crate::common::EncodeValue;
 use crate::errors::MySQLError;
 use crate::errors::MySQLResult;
-use crate::table::decoder::{encode_value, get_handle_from_record_key, EncoderRow, Row};
+use crate::table::decoder::{encode_value, get_handle_from_record_key, DecoderRow, EncoderRow};
 use crate::transaction::TransactionContext;
-use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use byteorder::{LittleEndian, WriteBytesExt};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -50,7 +50,9 @@ impl TableSource {
         handle: &EncodeValue,
     ) -> MySQLResult<Vec<EncodeValue>> {
         if let Some(primary_info) = self.meta.get_primary_index() {
-            return self.read_record_by_index(reader, primary_info.as_ref(), select_cols, handle).await;
+            return self
+                .read_record_by_index(reader, primary_info.as_ref(), select_cols, handle)
+                .await;
         }
         Err(MySQLError::NoIndex)
     }
@@ -66,17 +68,17 @@ impl TableSource {
         let value = reader.get(&key).await?;
         match value {
             Some(v) => {
-                let row = Row::from_bytes(v)?;
+                let row = DecoderRow::from_bytes(v)?;
                 let mut result = vec![];
                 for col in select_cols.columns.iter() {
                     match row.get_data(col.id as u32) {
                         Some(Some(mut v)) => {
                             result.push(EncodeValue::read_from(&mut v, &col.data_type)?);
-                        },
+                        }
                         _ => result.push(EncodeValue::NULL),
                     }
                 }
-            },
+            }
             None => {
                 return Ok(vec![]);
             }
@@ -96,7 +98,10 @@ impl TableSource {
             None => Ok(None),
             Some(v) => {
                 let col = self.meta.columns[index_info.columns[0].1].as_ref();
-                Ok(Some(EncodeValue::read_from(&mut v.as_ref(), &col.data_type)?))
+                Ok(Some(EncodeValue::read_from(
+                    &mut v.as_ref(),
+                    &col.data_type,
+                )?))
             }
         }
     }
@@ -105,19 +110,30 @@ impl TableSource {
         &self,
         writer: &mut W,
         row: &mut EncoderRow,
+        vcols: &[Arc<ColumnInfo>],
         values: Vec<EncodeValue>,
     ) -> MySQLResult<Vec<u8>> {
         let key = self.get_record_key(&values)?;
         if writer.check_constants(&key).await? {
             return Err(MySQLError::KeyExist);
         }
-        for i in 0..self.meta.columns.len() {
-            row.append_column(
-                self.meta.columns[i].id as u32,
-                &values[i],
-                &self.meta.columns[i].data_type,
-            )?;
+        let mut offsets = vec![self.meta.columns.len(), self.meta.columns.len()];
+        for i in 0..vcols.len() {
+            offsets[vcols[i].offset] = i;
         }
+        for col in self.meta.columns.iter() {
+            let idx = offsets[col.offset];
+            if idx < values.len() {
+                row.append_column(col.id as u32, &values[idx], &col.data_type)?;
+            } else {
+                if let Some(generator) = col.default_value.as_ref() {
+                    row.append_column(col.id as u32, &generator.generate(), &col.data_type)?;
+                } else {
+                    return Err(MySQLError::MissColumn(format!("Miss column {}", col.name)));
+                }
+            }
+        }
+
         let handle = get_handle_from_record_key(&key);
 
         let mut index_key = Vec::with_capacity(self.get_handle_size());
@@ -130,8 +146,7 @@ impl TableSource {
         }
 
         let value = row.to_bytes()?;
-        row.clear();
-        writer.write(&key, &value).await?;
+        writer.write(&key, value).await?;
         Ok(handle.to_vec())
     }
 
@@ -160,7 +175,12 @@ impl TableSource {
         Err(MySQLError::NoIndex)
     }
 
-    fn encode_index_key(&self, index_key: &mut Vec<u8>, index_info: &IndexInfo,values: &[EncodeValue]) -> MySQLResult<()> {
+    fn encode_index_key(
+        &self,
+        index_key: &mut Vec<u8>,
+        index_info: &IndexInfo,
+        values: &[EncodeValue],
+    ) -> MySQLResult<()> {
         index_key.clear();
         index_key.push(b't');
         index_key.write_u64::<LittleEndian>(self.id)?;
@@ -176,5 +196,3 @@ impl TableSource {
         64
     }
 }
-
-

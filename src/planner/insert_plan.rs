@@ -1,8 +1,8 @@
 use crate::common::EncodeValue;
-use crate::table::schema::DataSchema;
-use std::sync::Arc;
-use crate::table::table::TableSource;
 use crate::session::SessionRef;
+use crate::table::schema::DataSchema;
+use crate::table::table::TableSource;
+use std::sync::Arc;
 
 pub struct InsertPlan {
     pub table: Arc<TableSource>,

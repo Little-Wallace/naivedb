@@ -1,8 +1,6 @@
-
 use crate::errors::MySQLResult;
-use crate::store::{Storage, Transaction};
+use crate::store::Transaction;
 use crate::transaction::TransactionContext;
-use std::sync::Arc;
 
 pub struct OptimisticTransactionContext {
     txn: Box<dyn Transaction>,
@@ -10,9 +8,7 @@ pub struct OptimisticTransactionContext {
 
 impl OptimisticTransactionContext {
     pub fn new(txn: Box<dyn Transaction>) -> OptimisticTransactionContext {
-        OptimisticTransactionContext {
-            txn,
-        }
+        OptimisticTransactionContext { txn }
     }
 
     pub fn take_transaction(self) -> Box<dyn Transaction> {
@@ -38,5 +34,3 @@ impl TransactionContext for OptimisticTransactionContext {
         self.txn.get(key).await
     }
 }
-
-

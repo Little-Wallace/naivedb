@@ -3,14 +3,10 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use sqlparser::ast::DataType;
 use std::io;
 
-pub struct Decoder {
-    data: Vec<u8>,
-    not_null_cols: Vec<usize>,
-    null_cols: Vec<usize>,
-    cursor: usize,
-}
+const ROW_HEADER: &[u8] = &[128, 0];
 
-pub struct Row {
+#[derive(Default, Clone)]
+pub struct DecoderRow {
     pub cols: Vec<u32>,
     pub offsets: Vec<usize>,
     pub data: Vec<u8>,
@@ -18,8 +14,8 @@ pub struct Row {
     pub num_not_null_cols: usize,
 }
 
-impl Row {
-    pub fn from_bytes(mut data: Vec<u8>) -> io::Result<Row> {
+impl DecoderRow {
+    pub fn from_bytes(mut data: Vec<u8>) -> io::Result<DecoderRow> {
         // store flag and version in data[0..2]
         let mut input = data.as_slice();
         let _ = input.read_u8()?;
@@ -39,7 +35,7 @@ impl Row {
         }
         cursor += num_not_null_cols * 4;
 
-        Ok(Row {
+        Ok(DecoderRow {
             data,
             cursor,
             cols,
@@ -68,11 +64,13 @@ impl Row {
     }
 }
 
+#[derive(Default, Clone)]
 pub struct EncoderRow {
-    pub cols: Vec<u32>,
-    pub null_cols: Vec<u32>,
-    pub offset: Vec<u32>,
-    pub buf: Vec<u8>,
+    cols: Vec<u32>,
+    null_cols: Vec<u32>,
+    offset: Vec<u32>,
+    values: Vec<u8>,
+    buf: Vec<u8>,
 }
 
 impl EncoderRow {
@@ -82,6 +80,7 @@ impl EncoderRow {
             cols: vec![],
             offset: vec![],
             null_cols: vec![],
+            values: vec![],
             buf,
         }
     }
@@ -96,35 +95,35 @@ impl EncoderRow {
             self.null_cols.push(col);
         } else {
             self.cols.push(col);
-            value.write_to(&mut self.buf, data_type)?;
-            self.offset.push(self.buf.len() as u32);
+            value.write_to(&mut self.values, data_type)?;
+            self.offset.push(self.values.len() as u32);
         }
         Ok(())
     }
 
-    pub fn to_bytes(&self) -> io::Result<Vec<u8>> {
-        let mut data =
-            Vec::with_capacity(self.buf.len() + (self.cols.len() + self.null_cols.len() + 4) * 4);
-        data.extend_from_slice(&[128, 0]);
-        data.write_u16::<LittleEndian>(self.cols.len() as u16)?;
-        data.write_u16::<LittleEndian>(self.null_cols.len() as u16)?;
+    pub fn to_bytes(&mut self) -> io::Result<&[u8]> {
+        self.buf.copy_from_slice(ROW_HEADER);
+        self.buf.write_u16::<LittleEndian>(self.cols.len() as u16)?;
+        self.buf
+            .write_u16::<LittleEndian>(self.null_cols.len() as u16)?;
         for c in self.cols.iter() {
-            data.write_u32::<LittleEndian>(*c)?;
+            self.buf.write_u32::<LittleEndian>(*c)?;
         }
         for c in self.null_cols.iter() {
-            data.write_u32::<LittleEndian>(*c)?;
+            self.buf.write_u32::<LittleEndian>(*c)?;
         }
         for offset in self.offset.iter() {
-            data.write_u32::<LittleEndian>(*offset)?;
+            self.buf.write_u32::<LittleEndian>(*offset)?;
         }
-        data.extend_from_slice(&self.buf);
-        Ok(data)
+        self.buf.extend_from_slice(&self.values);
+        Ok(self.buf.as_slice())
     }
 
     pub fn clear(&mut self) {
         self.offset.clear();
         self.cols.clear();
         self.null_cols.clear();
+        self.values.clear();
         self.buf.clear();
     }
 }
@@ -140,7 +139,7 @@ pub fn get_handle_from_record_key(key: &[u8]) -> &[u8] {
 #[cfg(test)]
 mod tests {
     use crate::common::EncodeValue;
-    use crate::table::decoder::{EncoderRow, Row};
+    use crate::table::decoder::{DecoderRow, EncoderRow};
     use sqlparser::ast::DataType;
 
     #[test]
@@ -169,7 +168,7 @@ mod tests {
             .append_column(6, &EncodeValue::NULL, &DataType::Int)
             .unwrap();
         let encode_data = encoder.to_bytes().unwrap();
-        let row = Row::from_bytes(encode_data).unwrap();
+        let row = DecoderRow::from_bytes(encode_data.to_vec()).unwrap();
         assert_eq!(row.get_data(1), Some(None));
         assert_eq!(row.get_data(2), Some(None));
         assert_eq!(row.get_data(3), Some(None));

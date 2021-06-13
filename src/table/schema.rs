@@ -1,15 +1,64 @@
+use crate::common::EncodeValue;
 use crate::errors::{MySQLError, MySQLResult};
+use msql_srv::{Column, ColumnFlags, ColumnType};
 use sqlparser::ast::DataType;
-use sqlparser::ast::{ColumnDef, ColumnOption, Ident, ObjectName, TableConstraint};
-use msql_srv::{Column, ColumnType, ColumnFlags};
+use sqlparser::ast::{ColumnDef, ColumnOption, Expr, Ident, ObjectName, TableConstraint, Value};
+use std::fmt::Debug;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+
+pub trait ValueGenerator: Send + Sync + Debug {
+    fn generate(&self) -> EncodeValue;
+    fn name(&self) -> &str;
+}
+
+#[derive(Debug)]
+pub struct DefaultValueGenerator {
+    default_value: EncodeValue,
+}
+
+impl DefaultValueGenerator {
+    pub fn new(default_value: EncodeValue) -> Self {
+        DefaultValueGenerator { default_value }
+    }
+}
+
+impl ValueGenerator for DefaultValueGenerator {
+    fn generate(&self) -> EncodeValue {
+        self.default_value.clone()
+    }
+
+    fn name(&self) -> &str {
+        "DefaultValueGenerator"
+    }
+}
+
+#[derive(Debug)]
+pub struct AutoIncrementIdGenerator {
+    max_id: Arc<AtomicU64>,
+}
+
+impl AutoIncrementIdGenerator {
+    pub fn new(max_id: Arc<AtomicU64>) -> Self {
+        AutoIncrementIdGenerator { max_id }
+    }
+}
+
+impl ValueGenerator for AutoIncrementIdGenerator {
+    fn generate(&self) -> EncodeValue {
+        let id = self.max_id.fetch_add(1, Ordering::SeqCst);
+        EncodeValue::Int(id as i64)
+    }
+
+    fn name(&self) -> &str {
+        "AutoIncrementIdGenerator"
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TableState {
     Tombstone,
     Public,
-    WriteOnly,
-    ReadOnly,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -36,23 +85,45 @@ pub struct TableInfo {
     pub indices: Vec<Arc<IndexInfo>>,
     pub state: TableState,
     pub pk_is_handle: bool,
-    pub auto_inc_id: u64,
     pub max_column_id: u64,
     pub max_index_id: u64,
     pub update_ts: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct ColumnInfo {
     pub id: u64,
     pub name: String,
     pub offset: usize,
     pub data_type: DataType,
-    pub default_value: Vec<u8>,
+    pub default_value: Option<Box<dyn ValueGenerator>>,
     pub comment: String,
     pub key: IndexType,
     pub not_null: bool,
 }
+
+impl PartialEq for ColumnInfo {
+    fn eq(&self, other: &Self) -> bool {
+        let eq = self.id == other.id
+            && self.name == other.name
+            && self.offset == other.offset
+            && self.comment == other.comment
+            && self.key == other.key
+            && self.not_null == other.not_null;
+        if !eq {
+            return false;
+        }
+        if let Some(f) = self.default_value.as_ref() {
+            return other
+                .default_value
+                .as_ref()
+                .map_or(false, |v| v.name() == f.name());
+        }
+        other.default_value.is_none()
+    }
+}
+
+impl Eq for ColumnInfo {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IndexInfo {
@@ -92,7 +163,6 @@ impl TableInfo {
             indices: vec![],
             state: TableState::Public,
             pk_is_handle: true,
-            auto_inc_id: 0,
             max_column_id: 0,
             max_index_id: 0,
             update_ts: 0,
@@ -166,13 +236,13 @@ impl TableInfo {
             name: col_def.name.value.to_lowercase(),
             offset,
             data_type: col_def.data_type.clone(),
-            default_value: vec![],
+            default_value: None,
             comment: "".to_string(),
             key: IndexType::None,
             not_null: false,
         };
         for opt in col_def.options.iter() {
-            match opt.option {
+            match &opt.option {
                 ColumnOption::Unique { is_primary } => {
                     col.key = IndexType::Primary;
                     constraints.push(TableConstraint::Unique {
@@ -181,11 +251,26 @@ impl TableInfo {
                             value: col_def.name.value.to_lowercase(),
                             quote_style: None,
                         }],
-                        is_primary,
+                        is_primary: *is_primary,
                     });
                 }
                 ColumnOption::NotNull => {
                     col.not_null = true;
+                }
+                ColumnOption::DialectSpecific(others) => {}
+                ColumnOption::Default(expr) => {
+                    if let Expr::Value(data) = expr {
+                        let val = match data {
+                            Value::SingleQuotedString(val) => {
+                                self.parse_column_string_value(&col.data_type, val)?
+                            }
+                            Value::DoubleQuotedString(val) => {
+                                self.parse_column_string_value(&col.data_type, val)?
+                            }
+                            d => EncodeValue::from_parse_value(d.clone())?,
+                        };
+                        col.default_value = Some(Box::new(DefaultValueGenerator::new(val)));
+                    }
                 }
                 _ => {
                     // TODO: support unique constraint in column define
@@ -206,11 +291,7 @@ impl TableInfo {
             unique: false,
         };
         match constraint {
-            TableConstraint::Unique {
-                columns,
-                name,
-                ..
-            } => {
+            TableConstraint::Unique { columns, name, .. } => {
                 if let Some(name) = name {
                     index_info.name = name.value.to_lowercase();
                 }
@@ -234,28 +315,42 @@ impl TableInfo {
         }
         Ok(index_info)
     }
-}
 
+    fn parse_column_string_value(
+        &self,
+        data_type: &DataType,
+        val: &String,
+    ) -> MySQLResult<EncodeValue> {
+        let v = match data_type {
+            DataType::Int | DataType::BigInt | DataType::SmallInt => {
+                let v = val.parse::<i64>()?;
+                EncodeValue::Int(v)
+            }
+            DataType::Double => {
+                let v = val.parse::<f64>()?;
+                EncodeValue::Double(v)
+            }
+            DataType::String => EncodeValue::Bytes(val.as_bytes().to_vec()),
+            _ => return Err(MySQLError::ColumnMissMatch),
+        };
+        Ok(v)
+    }
+}
 
 impl ColumnInfo {
     pub fn to_mysql_column(&self) -> MySQLResult<Column> {
         let tp = match &self.data_type {
-            DataType::Char(size) =>
-                ColumnType::MYSQL_TYPE_VARCHAR,
-            DataType::Varchar(size) =>
-                ColumnType::MYSQL_TYPE_VARCHAR,
+            DataType::Char(_) => ColumnType::MYSQL_TYPE_VARCHAR,
+            DataType::Varchar(size) => ColumnType::MYSQL_TYPE_VARCHAR,
             DataType::Decimal(_, _) => ColumnType::MYSQL_TYPE_DECIMAL,
-            DataType::Float(size) => ColumnType::MYSQL_TYPE_FLOAT,
+            DataType::Float(_) => ColumnType::MYSQL_TYPE_FLOAT,
             DataType::SmallInt => ColumnType::MYSQL_TYPE_SHORT,
             DataType::Int => ColumnType::MYSQL_TYPE_LONG,
             DataType::BigInt => ColumnType::MYSQL_TYPE_LONG,
-            DataType::Double =>
-                ColumnType::MYSQL_TYPE_FLOAT,
+            DataType::Double => ColumnType::MYSQL_TYPE_FLOAT,
             DataType::Boolean => ColumnType::MYSQL_TYPE_SHORT,
-            DataType::Text =>
-                ColumnType::MYSQL_TYPE_VARCHAR,
-            DataType::String =>
-                ColumnType::MYSQL_TYPE_VAR_STRING,
+            DataType::Text => ColumnType::MYSQL_TYPE_VARCHAR,
+            DataType::String => ColumnType::MYSQL_TYPE_VAR_STRING,
             _ => return Err(MySQLError::UnsupportSQL),
         };
         Ok(Column {

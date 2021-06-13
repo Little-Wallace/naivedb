@@ -1,13 +1,15 @@
+use crate::common::EncodeValue;
 use crate::errors::{MySQLError, MySQLResult};
 use crate::planner::point_get_plan::QueryPlanBuilder;
-use crate::planner::{CreateTablePlan, PlanNode, PointGetPlan, SelectPlan, InsertPlan};
+use crate::planner::{CreateTablePlan, InsertPlan, PlanNode};
 use crate::session::SessionRef;
-use crate::table::schema::{TableInfo, DataSchema};
-use sqlparser::ast::{ColumnDef, Expr, Ident, ObjectName, Query, SqlOption, Statement, TableConstraint};
+use crate::table::schema::{DataSchema, TableInfo};
+use sqlparser::ast::{
+    ColumnDef, Expr, Ident, ObjectName, Query, SqlOption, Statement, TableConstraint,
+};
 use sqlparser::dialect::MySqlDialect;
 use sqlparser::parser::Parser;
 use std::sync::Arc;
-use crate::common::EncodeValue;
 
 pub struct PlanBuilder {
     session: SessionRef,
@@ -115,22 +117,20 @@ impl PlanBuilder {
                         match e {
                             Expr::Value(v) => {
                                 row.push(EncodeValue::from_parse_value(v.clone())?);
-                            },
+                            }
                             _ => return Err(MySQLError::UnsupportSQL),
                         }
                     }
                     ec_values.push(row);
                 }
-                Ok(PlanNode::Insert(InsertPlan{
+                Ok(PlanNode::Insert(InsertPlan {
                     table,
                     values: ec_values,
-                    schema: DataSchema{ columns },
+                    schema: DataSchema { columns },
                     session: self.session.clone(),
                 }))
-            },
-            _ => {
-                Err(MySQLError::UnsupportSQL)
             }
+            _ => Err(MySQLError::UnsupportSQL),
         }
     }
 }
