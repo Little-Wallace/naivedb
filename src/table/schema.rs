@@ -3,6 +3,8 @@ use crate::errors::{MySQLError, MySQLResult};
 use msql_srv::{Column, ColumnFlags, ColumnType};
 use sqlparser::ast::DataType;
 use sqlparser::ast::{ColumnDef, ColumnOption, Expr, Ident, ObjectName, TableConstraint, Value};
+use sqlparser::tokenizer::{Token, Word};
+use sqlparser::dialect::keywords;
 use std::fmt::Debug;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -87,6 +89,7 @@ pub struct TableInfo {
     pub pk_is_handle: bool,
     pub max_column_id: u64,
     pub max_index_id: u64,
+    pub max_row_id: Arc<AtomicU64>,
     pub update_ts: u64,
 }
 
@@ -166,6 +169,7 @@ impl TableInfo {
             max_column_id: 0,
             max_index_id: 0,
             update_ts: 0,
+            max_row_id: Arc::new(AtomicU64::new(0)),
         };
         table_info.build_columns_and_constraints(column_defs, constrains)?;
         Ok(table_info)
@@ -257,7 +261,15 @@ impl TableInfo {
                 ColumnOption::NotNull => {
                     col.not_null = true;
                 }
-                ColumnOption::DialectSpecific(others) => {}
+                ColumnOption::DialectSpecific(others) => {
+                    for word in others {
+                        if let Token::Word(Word{ value, keyword, ..}) = word {
+                            if value.to_lowercase() == "auto_increment" && keyword == keywords::AUTO_INCREMENT {
+                                col.default_value = Some(Box::new(AutoIncrementIdGenerator::new(self.max_row_id.clone())));
+                            }
+                        }
+                    }
+                }
                 ColumnOption::Default(expr) => {
                     if let Expr::Value(data) = expr {
                         let val = match data {

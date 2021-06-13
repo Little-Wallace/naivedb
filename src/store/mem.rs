@@ -68,6 +68,14 @@ impl Storage for MemStorage {
 #[async_trait]
 impl Transaction for MemTransaction {
     async fn commit(&mut self) -> MySQLResult<()> {
+        let mut data = self.data.lock().unwrap();
+        for (key, value) in self.cache.iter() {
+            if let Some(v) = data.get_mut(key) {
+                v.push(value.clone());
+            } else {
+                data.insert(key.clone(), vec![value.clone()]);
+            }
+        }
         Ok(())
     }
 
