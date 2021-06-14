@@ -86,17 +86,6 @@ pub struct EncoderRow {
 }
 
 impl EncoderRow {
-    pub fn new(mut buf: Vec<u8>) -> EncoderRow {
-        buf.clear();
-        EncoderRow {
-            cols: vec![],
-            offset: vec![],
-            null_cols: vec![],
-            values: vec![],
-            buf,
-        }
-    }
-
     pub fn append_column(
         &mut self,
         col: u32,

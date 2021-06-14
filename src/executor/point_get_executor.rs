@@ -36,11 +36,9 @@ impl Executor for PointGetExecutor {
                         &self.plan.index_value,
                     )
                     .await?;
+                let data = if ret.is_empty() { vec![] } else { vec![ret] };
                 let schema = self.plan.select_columns.clone();
-                return Ok(vec![DataBlock {
-                    schema,
-                    data: vec![ret],
-                }]);
+                return Ok(vec![DataBlock { schema, data }]);
             } else {
                 let opts = TransactionOptions { pessimistic: false };
                 self.storage.new_transaction(&opts).await?

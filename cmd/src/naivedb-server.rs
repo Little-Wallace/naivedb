@@ -1,6 +1,7 @@
 use clap::{crate_authors, App, Arg};
 use naive_sql::server::Server;
 use naive_sql::Config;
+use naive_sql::StorageType;
 use std::path::Path;
 
 #[tokio::main]
@@ -25,13 +26,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .help("Set the configuration file")
                 .takes_value(true),
         )
+        .arg(
+            Arg::with_name("storage")
+                .long("storage")
+                .takes_value(true)
+                .help("Set the storage type"),
+        )
         .get_matches();
 
     let address = matches.value_of("addr").unwrap_or("");
 
-    let config = matches
+    let mut config = matches
         .value_of_os("config")
         .map_or_else(Config::default, |path| Config::from_file(Path::new(path)));
+    if let Some(v) = matches.value_of("storage") {
+        if v == "mem" {
+            config.storage = StorageType::Mem;
+        } else if v == "tikv" {
+            config.storage = StorageType::TiKV;
+        } else {
+            panic!("unkown storage type");
+        }
+    }
     let s = Server::new(address.to_string(), config).await;
     let _ = s.start().await;
     Ok(())
