@@ -3,8 +3,8 @@ use crate::errors::{MySQLError, MySQLResult};
 use msql_srv::{Column, ColumnFlags, ColumnType};
 use sqlparser::ast::DataType;
 use sqlparser::ast::{ColumnDef, ColumnOption, Expr, Ident, ObjectName, TableConstraint, Value};
-use sqlparser::tokenizer::{Token, Word};
 use sqlparser::dialect::keywords;
+use sqlparser::tokenizer::{Token, Word};
 use std::fmt::Debug;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -263,9 +263,13 @@ impl TableInfo {
                 }
                 ColumnOption::DialectSpecific(others) => {
                     for word in others {
-                        if let Token::Word(Word{ value, keyword, ..}) = word {
-                            if value.to_lowercase() == "auto_increment" && *keyword == keywords::Keyword::AUTO_INCREMENT {
-                                col.default_value = Some(Box::new(AutoIncrementIdGenerator::new(self.max_row_id.clone())));
+                        if let Token::Word(Word { value, keyword, .. }) = word {
+                            if value.to_lowercase() == "auto_increment"
+                                && *keyword == keywords::Keyword::AUTO_INCREMENT
+                            {
+                                col.default_value = Some(Box::new(AutoIncrementIdGenerator::new(
+                                    self.max_row_id.clone(),
+                                )));
                             }
                         }
                     }
@@ -303,7 +307,11 @@ impl TableInfo {
             unique: false,
         };
         match constraint {
-            TableConstraint::Unique { columns, name, is_primary } => {
+            TableConstraint::Unique {
+                columns,
+                name,
+                is_primary,
+            } => {
                 if let Some(name) = name {
                     index_info.name = name.value.to_lowercase();
                 }
@@ -354,7 +362,7 @@ impl ColumnInfo {
     pub fn to_mysql_column(&self) -> MySQLResult<Column> {
         let tp = match &self.data_type {
             DataType::Char(_) => ColumnType::MYSQL_TYPE_VARCHAR,
-            DataType::Varchar(size) => ColumnType::MYSQL_TYPE_VARCHAR,
+            DataType::Varchar(_) => ColumnType::MYSQL_TYPE_VARCHAR,
             DataType::Decimal(_, _) => ColumnType::MYSQL_TYPE_DECIMAL,
             DataType::Float(_) => ColumnType::MYSQL_TYPE_FLOAT,
             DataType::SmallInt => ColumnType::MYSQL_TYPE_SHORT,

@@ -66,10 +66,10 @@ impl TableSource {
     ) -> MySQLResult<Vec<EncodeValue>> {
         let key = self.get_record_by_handle(primary_info, handle)?;
         let value = reader.get(&key).await?;
+        let mut result = vec![];
         match value {
             Some(v) => {
                 let row = DecoderRow::from_bytes(v)?;
-                let mut result = vec![];
                 for col in select_cols.columns.iter() {
                     match row.get_data(col.id as u32) {
                         Some(Some(mut v)) => {
@@ -83,7 +83,7 @@ impl TableSource {
                 return Ok(vec![]);
             }
         }
-        Ok(vec![])
+        Ok(result)
     }
 
     pub async fn read_handle_from_index<W: TransactionContext>(
@@ -140,7 +140,11 @@ impl TableSource {
             if idx < values.len() {
                 row.append_column(col.id as u32, &values[idx], &col.data_type)?;
             } else {
-                row.append_column(col.id as u32, &default_values[idx - values.len()], &col.data_type)?;
+                row.append_column(
+                    col.id as u32,
+                    &default_values[idx - values.len()],
+                    &col.data_type,
+                )?;
             }
         }
 
@@ -171,10 +175,12 @@ impl TableSource {
         Ok(key)
     }
 
-    fn get_record_key(&self,
-                      values: &[EncodeValue],
-                      default_values: &[EncodeValue],
-                      offsets: &[usize]) -> MySQLResult<Vec<u8>> {
+    fn get_record_key(
+        &self,
+        values: &[EncodeValue],
+        default_values: &[EncodeValue],
+        offsets: &[usize],
+    ) -> MySQLResult<Vec<u8>> {
         if let Some(pk_index) = self.meta.get_primary_index() {
             let mut key = Vec::with_capacity(self.get_handle_size());
             key.push(b't');
@@ -186,12 +192,15 @@ impl TableSource {
                 if idx < values.len() {
                     encode_value(&mut key, &values[idx], &col.data_type)?;
                 } else {
-                    encode_value(&mut key, &default_values[idx - values.len()], &col.data_type)?;
+                    encode_value(
+                        &mut key,
+                        &default_values[idx - values.len()],
+                        &col.data_type,
+                    )?;
                 }
             }
             return Ok(key);
         }
-        println!("no index key");
         Err(MySQLError::NoIndex)
     }
 
@@ -214,5 +223,147 @@ impl TableSource {
 
     fn get_handle_size(&self) -> usize {
         64
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::common::EncodeValue;
+    use sqlparser::ast::DataType;
+    use tokio::runtime;
+
+    struct TestTransactionContext {
+        pub kvs: Vec<(Vec<u8>, Vec<u8>)>,
+        pub expected_key: Vec<u8>,
+        pub expected_value: Option<Vec<u8>>,
+    }
+
+    #[async_trait::async_trait]
+    impl TransactionContext for TestTransactionContext {
+        async fn check_constants(&mut self, _key: &[u8]) -> MySQLResult<bool> {
+            Ok(false)
+        }
+
+        async fn write(&mut self, key: &[u8], value: &[u8]) -> MySQLResult<()> {
+            self.kvs.push((key.to_vec(), value.to_vec()));
+            Ok(())
+        }
+
+        async fn commit(&mut self) -> MySQLResult<()> {
+            Ok(())
+        }
+
+        async fn get(&mut self, key: &[u8]) -> MySQLResult<Option<Vec<u8>>> {
+            assert_eq!(key.to_vec(), self.expected_key);
+            Ok(self.expected_value.clone())
+        }
+    }
+
+    fn create_table_source() -> TableSource {
+        let fields = [
+            ("id", DataType::Int),
+            ("k", DataType::SmallInt),
+            ("name", DataType::String),
+            ("t", DataType::Int),
+            ("content", DataType::String),
+        ];
+        let mut id = 0;
+        let columns = fields
+            .iter()
+            .map(|(name, tp)| {
+                id += 1;
+                let key = if id == 1 {
+                    IndexType::Primary
+                } else {
+                    IndexType::None
+                };
+                Arc::new(ColumnInfo {
+                    id,
+                    name: name.to_string(),
+                    offset: (id - 1) as usize,
+                    data_type: tp.clone(),
+                    default_value: None,
+                    comment: "".to_string(),
+                    key,
+                    not_null: false,
+                })
+            })
+            .collect();
+        TableSource::new(Arc::new(TableInfo {
+            id: 1,
+            name: "sbtest".to_string(),
+            indices: vec![Arc::new(IndexInfo {
+                id: 1,
+                name: "".to_string(),
+                table_name: "sbtest".to_string(),
+                columns: vec![("id".to_string(), 0)],
+                state: TableState::Public,
+                primary: true,
+                unique: false,
+            })],
+            columns,
+            state: TableState::Public,
+            pk_is_handle: true,
+            max_column_id: 5,
+            max_index_id: 1,
+            max_row_id: Arc::new(Default::default()),
+            update_ts: 0,
+        }))
+    }
+
+    #[test]
+    fn test_insert_and_get_record() {
+        let table = create_table_source();
+        let mut ctx = TestTransactionContext {
+            kvs: vec![],
+            expected_key: vec![],
+            expected_value: None,
+        };
+        let mut row = EncoderRow::default();
+        let cols = table.meta.columns.clone();
+        let values = vec![
+            EncodeValue::Int(1),
+            EncodeValue::Int(21),
+            EncodeValue::Bytes("31".to_string().into_bytes()),
+            EncodeValue::Int(41),
+            EncodeValue::Bytes("51".to_string().into_bytes()),
+        ];
+        let mut r = runtime::Runtime::new().unwrap();
+        let handle = r
+            .block_on(table.add_record(&mut ctx, &mut row, &cols, values.clone()))
+            .unwrap();
+        assert_eq!(ctx.kvs.len(), 1);
+        let value = ctx.kvs[0].1.clone();
+        let mut key = vec![];
+        key.push(b't');
+        key.write_u64::<LittleEndian>(table.id).unwrap();
+        key.push(b'r');
+        key.extend_from_slice(&handle);
+        ctx.expected_value = Some(value.clone());
+        ctx.expected_key = key;
+        let v = r
+            .block_on(table.read_record(
+                &mut ctx,
+                &DataSchema {
+                    columns: cols.clone(),
+                },
+                &EncodeValue::Int(1),
+            ))
+            .unwrap();
+        assert_eq!(v, values);
+        let v = r
+            .block_on(table.read_record(
+                &mut ctx,
+                &DataSchema {
+                    columns: vec![cols[1].clone(), cols[4].clone(), cols[2].clone()],
+                },
+                &EncodeValue::Int(1),
+            ))
+            .unwrap();
+        assert_eq!(
+            v,
+            vec![values[1].clone(), values[4].clone(), values[2].clone()]
+        );
     }
 }

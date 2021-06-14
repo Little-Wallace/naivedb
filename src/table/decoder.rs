@@ -15,7 +15,7 @@ pub struct DecoderRow {
 }
 
 impl DecoderRow {
-    pub fn from_bytes(mut data: Vec<u8>) -> io::Result<DecoderRow> {
+    pub fn from_bytes(data: Vec<u8>) -> io::Result<DecoderRow> {
         // store flag and version in data[0..2]
         let mut input = data.as_slice();
         let _ = input.read_u8()?;
@@ -33,6 +33,18 @@ impl DecoderRow {
         for _ in 0..num_not_null_cols {
             offsets.push(input.read_u32::<LittleEndian>()? as usize);
         }
+        print!("cols: [");
+        for i in cols.iter() {
+            print!("{},", *i);
+        }
+        println!("]");
+        print!("offsets: [");
+        for i in offsets.iter() {
+            print!("{},", *i);
+        }
+        println!("]");
+        println!("cursor: {}", cursor);
+
         cursor += num_not_null_cols * 4;
 
         Ok(DecoderRow {

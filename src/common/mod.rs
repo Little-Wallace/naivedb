@@ -1,6 +1,5 @@
 mod types;
 
-use crate::errors::MySQLResult;
 use crate::table::schema::DataSchemaRef;
 
 pub use types::EncodeValue;

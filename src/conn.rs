@@ -9,7 +9,7 @@ use crate::store::Storage;
 use crate::table::table::TableSource;
 use async_trait::async_trait;
 use msql_srv::{
-    Column, ErrorKind, InitWriter, MysqlShim, ParamParser, QueryResultWriter, StatementMetaWriter,
+    ErrorKind, InitWriter, MysqlShim, ParamParser, QueryResultWriter, StatementMetaWriter,
 };
 use sqlparser::dialect::MySqlDialect;
 use sqlparser::parser::Parser;
@@ -47,6 +47,9 @@ impl MysqlConnection {
             session: SessionRef::new(Mutex::new(session)),
             storage,
         }
+    }
+    pub fn get_session(&self) -> SessionRef {
+        self.session.clone()
     }
 }
 

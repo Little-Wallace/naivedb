@@ -5,7 +5,6 @@ mod point_get_executor;
 
 use crate::common::SendableDataBlockStream;
 use crate::errors::MySQLResult;
-use crate::table::schema::DataSchemaRef;
 pub use create_table_executor::CreateTableExecutor;
 pub use executor_builder::ExecutorBuilder;
 pub use insert_executor::InsertExecutor;

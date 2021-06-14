@@ -3,7 +3,6 @@ use crate::common::SendableDataBlockStream;
 use crate::errors::MySQLResult;
 use crate::planner::CreateTablePlan;
 use crate::session::SessionRef;
-use crate::table::schema::DataSchemaRef;
 use crate::table::table::TableSource;
 use std::sync::Arc;
 

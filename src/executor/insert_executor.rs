@@ -4,7 +4,6 @@ use crate::common::SendableDataBlockStream;
 use crate::errors::MySQLResult;
 use crate::executor::Executor;
 use crate::planner::InsertPlan;
-use crate::session::SessionRef;
 use crate::store::{Storage, TransactionOptions};
 use crate::table::EncoderRow;
 use crate::transaction::{OptimisticTransactionContext, TransactionContext};

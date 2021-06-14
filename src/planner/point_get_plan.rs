@@ -4,9 +4,7 @@ use crate::planner::plan_expression::Expression;
 use crate::session::{Session, SessionRef};
 use crate::table::schema::{ColumnInfo, DataSchema, DataSchemaRef, IndexInfo};
 use crate::table::table::TableSource;
-use sqlparser::ast::{
-    BinaryOperator, Expr, Query, Select, SelectItem, SetExpr, Statement, TableFactor,
-};
+use sqlparser::ast::{BinaryOperator, Expr, Query, Select, SelectItem, SetExpr, TableFactor};
 use std::sync::Arc;
 
 pub struct PointGetPlan {
@@ -85,7 +83,7 @@ impl QueryPlanBuilder {
             return Ok(());
         }
         let table = select.from.first().unwrap();
-        if table.joins.is_empty() {
+        if !table.joins.is_empty() {
             self.point_get = false;
             return Ok(());
         }

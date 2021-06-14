@@ -20,7 +20,9 @@ impl Server {
         let core = self.core.clone();
         let address = self.address.clone();
         let _ = tokio::spawn(async move {
-            let mut listener = tokio::net::TcpListener::bind(address.as_str()).await.unwrap();
+            let mut listener = tokio::net::TcpListener::bind(address.as_str())
+                .await
+                .unwrap();
             let port = listener.local_addr().unwrap().port();
             println!("listening on port: {}", port);
             let mut incoming = listener.incoming();

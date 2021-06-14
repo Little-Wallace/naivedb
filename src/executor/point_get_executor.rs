@@ -2,7 +2,7 @@ use crate::common::{DataBlock, SendableDataBlockStream};
 use crate::errors::MySQLResult;
 use crate::executor::Executor;
 use crate::planner::PointGetPlan;
-use crate::store::{Storage, Transaction, TransactionOptions};
+use crate::store::{Storage, TransactionOptions};
 use crate::transaction::{AutoCommitContext, OptimisticTransactionContext};
 use std::sync::Arc;
 
