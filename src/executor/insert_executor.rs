@@ -20,11 +20,8 @@ impl Executor for InsertExecutor {
     }
 
     async fn execute(&mut self) -> MySQLResult<SendableDataBlockStream> {
-        let opts = TransactionOptions {
-            pessimistic: false,
-            no_timestamp: false,
-        };
-        let txn = self.storage.new_transaction(&opts)?;
+        let opts = TransactionOptions { pessimistic: false };
+        let txn = self.storage.new_transaction(&opts).await?;
         let mut ctx = OptimisticTransactionContext::new(txn);
         let mut row = EncoderRow::default();
         for r in self.plan.values.drain(..) {

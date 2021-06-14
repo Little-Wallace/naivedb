@@ -1,4 +1,5 @@
 mod common;
+mod config;
 mod conn;
 mod errors;
 mod executor;
@@ -8,3 +9,4 @@ mod session;
 mod store;
 mod table;
 mod transaction;
+pub use config::Config;

@@ -1,3 +1,4 @@
+use crate::config::Config;
 use crate::conn::MysqlServerCore;
 use msql_srv::*;
 use std::io;
@@ -11,8 +12,8 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new(address: String) -> Server {
-        let core = Arc::new(MysqlServerCore::new());
+    pub async fn new(address: String, config: Config) -> Server {
+        let core = Arc::new(MysqlServerCore::new(config).await);
         Server { core, address }
     }
 

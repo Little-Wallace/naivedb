@@ -20,11 +20,8 @@ impl TransactionContext for AutoCommitContext {
     }
 
     async fn write(&mut self, key: &[u8], value: &[u8]) -> MySQLResult<()> {
-        let opts = TransactionOptions {
-            pessimistic: false,
-            no_timestamp: false,
-        };
-        let mut txn = self.storage.new_transaction(&opts)?;
+        let opts = TransactionOptions { pessimistic: false };
+        let mut txn = self.storage.new_transaction(&opts).await?;
         txn.put(key, value).await?;
         txn.commit().await
     }

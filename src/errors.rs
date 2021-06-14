@@ -1,11 +1,12 @@
 use sqlparser::parser::ParserError;
 use std::io;
 use thiserror::Error;
+use tikv_client::Error as KVError;
 
 pub type MySQLResult<T> = std::result::Result<T, MySQLError>;
 
 /// Describes why a message is discarded.
-#[derive(Debug, PartialEq, Clone, Error)]
+#[derive(Debug, Error)]
 pub enum MySQLError {
     #[error("{0} prepare statement is not allowed")]
     PrepareMult(u64),
@@ -38,6 +39,9 @@ pub enum MySQLError {
 
     #[error("unsupported sql")]
     UnsupportSQL,
+
+    #[error("TiKV Error")]
+    TiKV(KVError),
 }
 
 impl From<io::Error> for MySQLError {
@@ -68,5 +72,11 @@ impl From<std::num::ParseFloatError> for MySQLError {
             "error when parse flot: {:?}",
             e
         )))
+    }
+}
+
+impl From<KVError> for MySQLError {
+    fn from(e: KVError) -> Self {
+        MySQLError::TiKV(e)
     }
 }

@@ -1,11 +1,11 @@
-use super::errors::MySQLError;
+use super::errors::{MySQLError, MySQLResult};
 use crate::common::SendableDataBlockStream;
-use crate::errors::MySQLResult;
+use crate::config::{Config, StorageType};
 use crate::executor::ExecutorBuilder;
 use crate::planner::PlanBuilder;
 use crate::session::{Session, SessionRef};
-use crate::store::MemStorage;
 use crate::store::Storage;
+use crate::store::{MemStorage, TiKVStorage};
 use crate::table::table::TableSource;
 use async_trait::async_trait;
 use msql_srv::{
@@ -22,13 +22,14 @@ pub struct MysqlServerCore {
 }
 
 impl MysqlServerCore {
-    pub fn new() -> MysqlServerCore {
-        // TODO: load schema from storage.
+    pub async fn new(config: Config) -> MysqlServerCore {
+        let storage: Arc<dyn Storage> = match config.storage {
+            StorageType::TiKV => Arc::new(TiKVStorage::create(&config.tikv).await.unwrap()),
+            StorageType::Mem => Arc::new(MemStorage::new()),
+            _ => panic!("unsupport storage type"),
+        };
         let tables = Arc::new(RwLock::new(HashMap::default()));
-        MysqlServerCore {
-            tables,
-            storage: Arc::new(MemStorage::new()),
-        }
+        MysqlServerCore { tables, storage }
     }
 
     pub fn create_connection(&self) -> MysqlConnection {

@@ -59,7 +59,7 @@ impl Storage for MemStorage {
         Ok(None)
     }
 
-    fn new_transaction(&self, _: &TransactionOptions) -> MySQLResult<Box<dyn Transaction>> {
+    async fn new_transaction(&self, _: &TransactionOptions) -> MySQLResult<Box<dyn Transaction>> {
         let start_ts = self.last_commit_ts.load(Ordering::Acquire);
         Ok(Box::new(MemTransaction::new(self.data.clone(), start_ts)))
     }
@@ -127,7 +127,7 @@ impl Transaction for MemTransaction {
         Ok(vec![])
     }
 
-    fn get_start_time(&self) -> Option<u64> {
-        Some(self.start_ts)
+    fn get_start_time(&self) -> u64 {
+        self.start_ts
     }
 }

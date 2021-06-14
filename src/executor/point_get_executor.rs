@@ -42,11 +42,8 @@ impl Executor for PointGetExecutor {
                     data: vec![ret],
                 }]);
             } else {
-                let opts = TransactionOptions {
-                    pessimistic: false,
-                    no_timestamp: false,
-                };
-                self.storage.new_transaction(&opts)?
+                let opts = TransactionOptions { pessimistic: false };
+                self.storage.new_transaction(&opts).await?
             }
         };
         let mut ctx = OptimisticTransactionContext::new(txn);

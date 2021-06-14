@@ -15,6 +15,10 @@ tokio = { version = "0.2", features = ["full"] }
 async-trait = "0.1"
 thiserror = "1.0"
 futures = "0.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.5"
+tikv-client = { git = "https://github.com/tikv/client-rust.git", branch = "master"}
 
 [workspace]
 # See https://github.com/rust-lang/rfcs/blob/master/text/2957-cargo-features2.md
