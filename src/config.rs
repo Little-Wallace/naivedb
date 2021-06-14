@@ -30,7 +30,7 @@ impl Config {
     pub fn from_file(path: &Path) -> Config {
         let s = std::fs::read_to_string(path).unwrap();
         let mut deserializer = toml::Deserializer::new(&s);
-        let mut cfg = <Config as serde::Deserialize>::deserialize(&mut deserializer).unwrap();
+        let cfg = <Config as serde::Deserialize>::deserialize(&mut deserializer).unwrap();
         cfg
     }
 }

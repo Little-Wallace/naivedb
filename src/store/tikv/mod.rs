@@ -68,7 +68,7 @@ impl Transaction for TiKVTransaction {
         Ok(v)
     }
 
-    async fn scan(&mut self, start: &[u8], end: &[u8]) -> MySQLResult<Vec<Vec<u8>>> {
+    async fn scan(&mut self, _start: &[u8], _end: &[u8]) -> MySQLResult<Vec<Vec<u8>>> {
         unimplemented!()
     }
 

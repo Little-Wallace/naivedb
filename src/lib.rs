@@ -9,4 +9,4 @@ mod session;
 mod store;
 mod table;
 mod transaction;
-pub use config::Config;
+pub use config::{Config, StorageType};
