@@ -49,6 +49,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     let s = Server::new(address.to_string(), config).await;
-    let _ = s.start().await;
+
+    if let Err(err) = s.start().await {
+        panic!("Server error: {}", err);
+    }
+
     Ok(())
 }

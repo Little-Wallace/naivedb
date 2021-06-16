@@ -13,11 +13,11 @@
 
 use crate::config::Config;
 use crate::conn::MysqlServerCore;
+use futures::prelude::*;
 use msql_srv::*;
 use std::io;
 use std::sync::Arc;
 use tokio;
-use tokio::stream::StreamExt;
 
 pub struct Server {
     core: Arc<MysqlServerCore>,
@@ -33,28 +33,38 @@ impl Server {
     pub async fn start(&self) -> io::Result<()> {
         let core = self.core.clone();
         let address = self.address.clone();
-        let _ = tokio::spawn(async move {
-            let mut listener = tokio::net::TcpListener::bind(address.as_str())
-                .await
-                .unwrap();
-            let port = listener.local_addr().unwrap().port();
+
+        let r = tokio::spawn(async move {
+            let mut listener = tokio::net::TcpListener::bind(&address).await?;
+            let port = listener.local_addr()?.port();
             println!("listening on port: {}", port);
+
             let mut incoming = listener.incoming();
             while let Some(stream) = incoming.next().await {
                 match stream {
                     Ok(s) => {
                         let conn = core.create_connection();
-                        if let Err(e) = MysqlIntermediary::run_on_tcp(conn, s).await {
-                            println!("connection error, {:?}", e);
-                        }
+                        tokio::spawn(MysqlIntermediary::run_on_tcp(conn, s).map_err(|err| {
+                            eprintln!("MySQL error: {}", err);
+                        }));
                     }
-                    Err(_) => {
-                        println!("connection error");
+                    Err(err) => {
+                        eprintln!("Connection error: {}", err);
                     }
                 }
             }
+
+            Ok::<(), io::Error>(())
         })
         .await;
+
+        match r {
+            Ok(res) => res?,
+            Err(err) => {
+                panic!("Runtime error: {}", err);
+            }
+        }
+
         Ok(())
     }
 }
