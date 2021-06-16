@@ -2,10 +2,11 @@ use super::schema::*;
 use crate::common::EncodeValue;
 use crate::errors::MySQLError;
 use crate::errors::MySQLResult;
-use crate::table::decoder::{encode_value, get_handle_from_record_key, DecoderRow, EncoderRow};
+use crate::table::decoder::{get_handle_from_record_key, DecoderRow, EncoderRow};
 use crate::transaction::TransactionContext;
 use byteorder::{LittleEndian, WriteBytesExt};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 pub struct TableSource {
@@ -13,6 +14,7 @@ pub struct TableSource {
     meta: Arc<TableInfo>,
     column_map: HashMap<String, Arc<ColumnInfo>>,
     unique_index_map: HashMap<String, Arc<IndexInfo>>,
+    valid: AtomicBool,
 }
 
 impl TableSource {
@@ -32,7 +34,16 @@ impl TableSource {
             meta: table,
             column_map,
             unique_index_map,
+            valid: AtomicBool::new(true),
         }
+    }
+
+    pub fn is_valid(&self) -> bool {
+        self.valid.load(Ordering::Acquire)
+    }
+
+    pub fn invalid(&self) {
+        self.valid.store(false, Ordering::Release);
     }
 
     pub fn get_column(&self, name: &String) -> Option<Arc<ColumnInfo>> {
@@ -41,6 +52,10 @@ impl TableSource {
 
     pub fn get_index(&self, name: &String) -> Option<Arc<IndexInfo>> {
         self.unique_index_map.get(name).map(|col| col.clone())
+    }
+
+    pub fn clone_meta(&self) -> TableInfo {
+        self.meta.as_ref().clone()
     }
 
     pub async fn read_record<W: TransactionContext>(
@@ -171,7 +186,7 @@ impl TableSource {
         key.write_u64::<LittleEndian>(self.id)?;
         key.push(b'r');
         let col = self.meta.columns[info.columns[0].1].as_ref();
-        encode_value(&mut key, handle, &col.data_type)?;
+        handle.encode_comparable(&mut key, &col.data_type)?;
         Ok(key)
     }
 
@@ -190,13 +205,10 @@ impl TableSource {
                 let col = self.meta.columns[*offset as usize].clone();
                 let idx = offsets[col.offset];
                 if idx < values.len() {
-                    encode_value(&mut key, &values[idx], &col.data_type)?;
+                    values[idx].encode_comparable(&mut key, &col.data_type)?;
                 } else {
-                    encode_value(
-                        &mut key,
-                        &default_values[idx - values.len()],
-                        &col.data_type,
-                    )?;
+                    default_values[idx - values.len()]
+                        .encode_comparable(&mut key, &col.data_type)?;
                 }
             }
             return Ok(key);
@@ -216,7 +228,7 @@ impl TableSource {
         index_key.push(b'i');
         for (_, offset) in index_info.columns.iter() {
             let col = self.meta.columns[*offset as usize].clone();
-            encode_value(index_key, &values[col.offset], &col.data_type)?;
+            values[col.offset].encode_comparable(index_key, &col.data_type)?;
         }
         Ok(())
     }

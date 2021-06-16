@@ -94,7 +94,8 @@ impl QueryPlanBuilder {
                     return Err(MySQLError::NoDB);
                 }
             }
-            if let Some(t) = session.get_table(&name.0.last().unwrap().value.to_lowercase()) {
+            let table_name = name.0.last().unwrap().value.to_lowercase();
+            if let Some(t) = session.get_table(&table_name) {
                 self.table = Some(t);
                 if let Some(expr) = select.selection.as_ref() {
                     self.visit_selection(session, expr)?;
@@ -106,7 +107,7 @@ impl QueryPlanBuilder {
                     self.visit_projections(&select.projection)?;
                 }
             } else {
-                return Err(MySQLError::NoTable);
+                return Err(MySQLError::NoTable(table_name));
             }
         }
         Ok(())

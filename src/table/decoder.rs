@@ -96,7 +96,7 @@ impl EncoderRow {
             self.null_cols.push(col);
         } else {
             self.cols.push(col);
-            value.write_to(&mut self.values, data_type)?;
+            value.encode(&mut self.values, data_type)?;
             self.offset.push(self.values.len() as u32);
         }
         Ok(())
@@ -127,10 +127,6 @@ impl EncoderRow {
         self.values.clear();
         self.buf.clear();
     }
-}
-
-pub fn encode_value(buf: &mut Vec<u8>, val: &EncodeValue, col: &DataType) -> io::Result<()> {
-    val.write_to(buf, col)
 }
 
 pub fn get_handle_from_record_key(key: &[u8]) -> &[u8] {

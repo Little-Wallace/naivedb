@@ -7,6 +7,7 @@ mod tikv;
 pub use mem::MemStorage;
 pub use tikv::{TiKVConfig, TiKVStorage};
 
+#[derive(Default)]
 pub struct TransactionOptions {
     pub pessimistic: bool,
 }

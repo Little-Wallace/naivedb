@@ -19,23 +19,26 @@ pub enum MySQLError {
     #[error("primary key has exist")]
     KeyExist,
 
+    #[error("index has exist")]
+    IndexExist,
+
     #[error("index not exist")]
     NoIndex,
 
     #[error("column not exist")]
     NoColumn,
 
+    #[error("table {0} doest not exist")]
+    NoTable(String),
+
+    #[error("DB not exist")]
+    NoDB,
+
     #[error("miss column {0}")]
     MissColumn(String),
 
     #[error("column not match values")]
     ColumnMissMatch,
-
-    #[error("table not exist")]
-    NoTable,
-
-    #[error("DB not exist")]
-    NoDB,
 
     #[error("unsupported sql")]
     UnsupportSQL,

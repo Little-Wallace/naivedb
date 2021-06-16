@@ -1,11 +1,11 @@
 use crate::common::EncodeValue;
 use crate::errors::{MySQLError, MySQLResult};
 use crate::planner::point_get_plan::QueryPlanBuilder;
-use crate::planner::{CreateTablePlan, InsertPlan, PlanNode};
+use crate::planner::{CreateIndexPlan, CreateTablePlan, InsertPlan, PlanNode};
 use crate::session::SessionRef;
-use crate::table::schema::{DataSchema, TableInfo};
+use crate::table::schema::{DataSchema, IndexInfo, TableInfo, TableState};
 use sqlparser::ast::{
-    ColumnDef, Expr, Ident, ObjectName, Query, SqlOption, Statement, TableConstraint,
+    ColumnDef, Expr, Ident, ObjectName, OrderByExpr, Query, SqlOption, Statement, TableConstraint,
 };
 use sqlparser::dialect::MySqlDialect;
 use sqlparser::parser::Parser;
@@ -22,20 +22,17 @@ impl PlanBuilder {
 
     pub fn build_from_sql(&self, query: &str) -> MySQLResult<PlanNode> {
         let dialect = MySqlDialect {};
-        let statement = Parser::parse_sql(&dialect, query)?;
+        let mut statement = Parser::parse_sql(&dialect, query)?;
         if statement.len() != 1 {
             return Result::Err(MySQLError::UnsupportSQL);
         }
-        statement
-            .first()
-            .map(|s| self.statement_to_plan(&s))
-            .unwrap()
+        statement.pop().map(|s| self.statement_to_plan(s)).unwrap()
     }
 
-    pub fn statement_to_plan(&self, statement: &Statement) -> MySQLResult<PlanNode> {
+    pub fn statement_to_plan(&self, statement: Statement) -> MySQLResult<PlanNode> {
         println!("{:?}", statement);
         match statement {
-            Statement::Query(q) => self.sql_query_to_plan(q),
+            Statement::Query(q) => self.sql_query_to_plan(&q),
             Statement::Insert {
                 table_name,
                 columns,
@@ -54,10 +51,17 @@ impl PlanBuilder {
                 name,
                 columns,
                 constraints,
-                *without_rowid,
-                *or_replace,
+                without_rowid,
+                or_replace,
                 table_properties,
             ),
+            Statement::CreateIndex {
+                name,
+                table_name,
+                columns,
+                unique,
+                if_not_exists,
+            } => self.sql_create_index_to_plan(name, table_name, columns, unique, if_not_exists),
             _ => return Err(MySQLError::UnsupportSQL),
         }
     }
@@ -72,30 +76,30 @@ impl PlanBuilder {
 
     fn sql_create_table_to_plan(
         &self,
-        name: &ObjectName,
-        column_defs: &Vec<ColumnDef>,
-        constrains: &Vec<TableConstraint>,
+        name: ObjectName,
+        column_defs: Vec<ColumnDef>,
+        constrains: Vec<TableConstraint>,
         _without_rowid: bool,
         _or_replace: bool,
-        _table_properties: &Vec<SqlOption>,
+        _table_properties: Vec<SqlOption>,
     ) -> MySQLResult<PlanNode> {
-        let table_info = Arc::new(TableInfo::create(name, column_defs, constrains)?);
+        let table_info = Arc::new(TableInfo::create(&name, &column_defs, &constrains)?);
         Ok(PlanNode::CreateTable(CreateTablePlan { table_info }))
     }
 
     fn sql_insert_to_plan(
         &self,
-        table_name: &ObjectName,
-        cols: &[Ident],
-        source: &Query,
+        table_name: ObjectName,
+        cols: Vec<Ident>,
+        source: Box<Query>,
     ) -> MySQLResult<PlanNode> {
         let table_name = table_name.0.last().unwrap().value.to_lowercase();
         let table = match self.session.lock().unwrap().get_table(&table_name) {
             Some(t) => t,
-            None => return Err(MySQLError::NoTable),
+            None => return Err(MySQLError::NoTable(table_name)),
         };
         let mut columns = vec![];
-        for col_name in cols {
+        for col_name in cols.iter() {
             let col_name = col_name.value.to_lowercase();
             let col = match table.get_column(&col_name) {
                 Some(col) => col,
@@ -129,6 +133,53 @@ impl PlanBuilder {
                 }))
             }
             _ => Err(MySQLError::UnsupportSQL),
+        }
+    }
+
+    fn sql_create_index_to_plan(
+        &self,
+        name: ObjectName,
+        table_name: ObjectName,
+        columns: Vec<OrderByExpr>,
+        unique: bool,
+        if_not_exists: bool,
+    ) -> MySQLResult<PlanNode> {
+        let table_name = table_name.0.last().unwrap().value.to_lowercase();
+        let index_name = name
+            .0
+            .last()
+            .map(|ident| ident.value.to_lowercase())
+            .unwrap_or("".to_string());
+        match self.session.lock().unwrap().get_table(&table_name) {
+            Some(table) => {
+                let mut column_infos = vec![];
+                for expr in columns {
+                    if let Expr::Identifier(ident) = expr.expr {
+                        if let Some(col) = table.get_column(&ident.value.to_lowercase()) {
+                            column_infos.push((col.name.clone(), col.offset));
+                        } else {
+                            return Err(MySQLError::NoColumn);
+                        }
+                    } else {
+                        return Err(MySQLError::UnsupportSQL);
+                    }
+                }
+                column_infos.sort_by_key(|col| col.1);
+                let index_info = IndexInfo {
+                    id: 0,
+                    name: index_name,
+                    table_name,
+                    columns: column_infos,
+                    state: TableState::Public,
+                    primary: false,
+                    unique,
+                };
+                Ok(PlanNode::CreateIndex(CreateIndexPlan {
+                    index_info: Arc::new(index_info),
+                    table,
+                }))
+            }
+            None => Err(MySQLError::NoTable(table_name)),
         }
     }
 }

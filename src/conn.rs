@@ -101,19 +101,14 @@ impl MysqlShim for MysqlConnection {
         results: QueryResultWriter<'_>,
     ) -> Result<(), Self::Error> {
         let plan_builder = PlanBuilder::create(self.session.clone());
-        let executor = plan_builder.build_from_sql(query).and_then(|plan| {
-            Ok(ExecutorBuilder::build(
-                plan,
-                self.session.clone(),
-                self.storage.clone(),
-            ))
-        });
-        let output = match executor {
-            Ok(mut executor) => executor.execute().await,
-            Err(e) => Err(e),
+        let output = async move {
+            let plan = plan_builder.build_from_sql(query)?;
+            let mut executor =
+                ExecutorBuilder::build(plan, self.session.clone(), self.storage.clone());
+            executor.execute().await
         };
 
-        match output {
+        match output.await {
             Ok(data) => {
                 done(data, results).await?;
             }

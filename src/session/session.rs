@@ -35,12 +35,17 @@ impl Session {
 
     pub fn add_table(&mut self, name: String, table: Arc<TableSource>) {
         let mut tables = self.tables.write().unwrap();
-        tables.insert(name, table);
+        if let Some(t) = tables.insert(name.clone(), table.clone()) {
+            t.invalid();
+        }
+        self.cache.insert(name, table);
     }
 
     pub fn get_table(&mut self, name: &String) -> Option<Arc<TableSource>> {
         if let Some(table) = self.cache.get(name) {
-            return Some(table.clone());
+            if table.is_valid() {
+                return Some(table.clone());
+            }
         }
         let table = self.tables.read().unwrap().get(name).map(|t| t.clone());
         if let Some(t) = table.as_ref() {
