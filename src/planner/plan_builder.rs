@@ -107,18 +107,18 @@ impl PlanBuilder {
             };
             columns.push(col);
         }
-        match &source.body {
+        match source.body {
             sqlparser::ast::SetExpr::Values(values) => {
                 let mut ec_values = vec![];
-                for value in values.0.iter() {
+                for value in values.0 {
                     if value.len() != cols.len() {
                         return Err(MySQLError::ColumnMissMatch);
                     }
                     let mut row = vec![];
-                    for e in value.iter() {
+                    for e in value {
                         match e {
                             Expr::Value(v) => {
-                                row.push(EncodeValue::from_parse_value(v.clone())?);
+                                row.push(EncodeValue::from_parse_value(v)?);
                             }
                             _ => return Err(MySQLError::UnsupportSQL),
                         }
