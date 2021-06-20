@@ -3,7 +3,8 @@ use crate::common::SendableDataBlockStream;
 use crate::errors::{MySQLError, MySQLResult};
 use crate::planner::CreateIndexPlan;
 use crate::session::SessionRef;
-use crate::store::{Storage, TransactionOptions};
+use crate::store::Storage;
+use crate::table::schema::{ColumnInfo, IndexType};
 use crate::table::TableSource;
 use std::sync::Arc;
 
@@ -46,6 +47,13 @@ impl Executor for CreateIndexExecutor {
         meta.max_index_id += 1;
         index_info.id = meta.max_index_id;
         meta.indices.push(Arc::new(index_info));
+        let mut columns = vec![];
+        for col in meta.columns.iter() {
+            let mut column: ColumnInfo = col.as_ref().clone();
+            column.key = IndexType::Index;
+            columns.push(Arc::new(column));
+        }
+        meta.columns = columns;
         let table_name = meta.name.clone();
         let table = TableSource::new(Arc::new(meta));
         session.add_table(table_name, Arc::new(table));

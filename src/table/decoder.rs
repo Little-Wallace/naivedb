@@ -33,18 +33,6 @@ impl DecoderRow {
         for _ in 0..num_not_null_cols {
             offsets.push(input.read_u32::<LittleEndian>()? as usize);
         }
-        print!("cols: [");
-        for i in cols.iter() {
-            print!("{},", *i);
-        }
-        println!("]");
-        print!("offsets: [");
-        for i in offsets.iter() {
-            print!("{},", *i);
-        }
-        println!("]");
-        println!("cursor: {}", cursor);
-
         cursor += num_not_null_cols * 4;
 
         Ok(DecoderRow {
@@ -141,7 +129,7 @@ mod tests {
 
     #[test]
     fn test_decode_and_encode() {
-        let mut encoder = EncoderRow::new(Vec::new());
+        let mut encoder = EncoderRow::default();
         let col1 = b"abc";
         encoder
             .append_column(0, &EncodeValue::Int(2), &DataType::Int)

@@ -12,9 +12,10 @@ use std::sync::Arc;
 pub trait ValueGenerator: Send + Sync + Debug {
     fn generate(&self) -> EncodeValue;
     fn name(&self) -> &str;
+    fn clone_box(&self) -> Box<dyn ValueGenerator>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DefaultValueGenerator {
     default_value: EncodeValue,
 }
@@ -33,9 +34,13 @@ impl ValueGenerator for DefaultValueGenerator {
     fn name(&self) -> &str {
         "DefaultValueGenerator"
     }
+
+    fn clone_box(&self) -> Box<dyn ValueGenerator> {
+        Box::new(self.clone())
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AutoIncrementIdGenerator {
     max_id: Arc<AtomicU64>,
 }
@@ -55,6 +60,10 @@ impl ValueGenerator for AutoIncrementIdGenerator {
     fn name(&self) -> &str {
         "AutoIncrementIdGenerator"
     }
+
+    fn clone_box(&self) -> Box<dyn ValueGenerator> {
+        Box::new(self.clone())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -63,7 +72,7 @@ pub enum TableState {
     Public,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IndexType {
     None,
     Primary,
@@ -103,6 +112,21 @@ pub struct ColumnInfo {
     pub comment: String,
     pub key: IndexType,
     pub not_null: bool,
+}
+
+impl Clone for ColumnInfo {
+    fn clone(&self) -> Self {
+        ColumnInfo {
+            id: self.id,
+            name: self.name.clone(),
+            offset: self.offset,
+            data_type: self.data_type.clone(),
+            default_value: self.default_value.as_ref().map(|v| v.clone_box()),
+            comment: self.comment.clone(),
+            key: self.key,
+            not_null: self.not_null,
+        }
+    }
 }
 
 impl PartialEq for ColumnInfo {

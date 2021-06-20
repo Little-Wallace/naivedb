@@ -21,6 +21,16 @@ pub struct MysqlServerCore {
     storage: Arc<dyn Storage>,
 }
 
+impl Default for MysqlServerCore {
+    fn default() -> MysqlServerCore {
+        let tables = Arc::new(RwLock::new(HashMap::default()));
+        MysqlServerCore {
+            tables,
+            storage: Arc::new(MemStorage::new()),
+        }
+    }
+}
+
 impl MysqlServerCore {
     pub async fn new(config: Config) -> MysqlServerCore {
         let storage: Arc<dyn Storage> = match config.storage {

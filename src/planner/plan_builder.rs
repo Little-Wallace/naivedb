@@ -142,7 +142,7 @@ impl PlanBuilder {
         table_name: ObjectName,
         columns: Vec<OrderByExpr>,
         unique: bool,
-        if_not_exists: bool,
+        _if_not_exists: bool,
     ) -> MySQLResult<PlanNode> {
         let table_name = table_name.0.last().unwrap().value.to_lowercase();
         let index_name = name
@@ -195,7 +195,7 @@ mod tests {
 
     #[test]
     fn test_build_point_get_plan() {
-        let core = MysqlServerCore::new();
+        let core = MysqlServerCore::default();
         let conn = core.create_connection();
         let session = conn.get_session();
         let columns = vec![
