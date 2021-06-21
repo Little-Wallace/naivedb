@@ -41,7 +41,7 @@ impl QueryPlanBuilder {
 
     pub fn try_point_get(mut self, query: &Query) -> MySQLResult<Option<PointGetPlan>> {
         self.visit(query)?;
-        if self.point_get {
+        if self.point_get && self.table.is_some() && !self.index_info.is_empty() {
             Ok(Some(PointGetPlan {
                 table: self.table.take().unwrap(),
                 index_info: self.index_info.first().unwrap().clone(),
@@ -109,6 +109,8 @@ impl QueryPlanBuilder {
             } else {
                 return Err(MySQLError::NoTable(table_name));
             }
+        } else {
+            self.point_get = false;
         }
         Ok(())
     }

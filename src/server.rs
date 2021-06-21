@@ -13,48 +13,56 @@
 
 use crate::config::Config;
 use crate::conn::MysqlServerCore;
+use futures::TryFutureExt;
 use msql_srv::*;
 use std::io;
 use std::sync::Arc;
 use tokio;
+use tokio::runtime::{Builder, Runtime};
 use tokio::stream::StreamExt;
 
 pub struct Server {
     core: Arc<MysqlServerCore>,
     address: String,
+    pool: Runtime,
 }
 
 impl Server {
     pub async fn new(address: String, config: Config) -> Server {
-        let core = Arc::new(MysqlServerCore::new(config).await);
-        Server { core, address }
+        let core = Arc::new(MysqlServerCore::new(config.clone()).await);
+        let pool = Builder::default()
+            .threaded_scheduler()
+            .core_threads(config.connection_poo_size)
+            .build()
+            .unwrap_or_else(|e| panic!("create pool failed, {}", e));
+        Server {
+            core,
+            address,
+            pool,
+        }
     }
 
     pub async fn start(&self) -> io::Result<()> {
         let core = self.core.clone();
         let address = self.address.clone();
-        let _ = tokio::spawn(async move {
-            let mut listener = tokio::net::TcpListener::bind(address.as_str())
-                .await
-                .unwrap();
-            let port = listener.local_addr().unwrap().port();
-            println!("listening on port: {}", port);
-            let mut incoming = listener.incoming();
-            while let Some(stream) = incoming.next().await {
-                match stream {
-                    Ok(s) => {
-                        let conn = core.create_connection();
-                        if let Err(e) = MysqlIntermediary::run_on_tcp(conn, s).await {
-                            println!("connection error, {:?}", e);
-                        }
-                    }
-                    Err(_) => {
-                        println!("connection error");
-                    }
+        let mut listener = tokio::net::TcpListener::bind(address.as_str())
+            .await
+            .unwrap();
+        let port = listener.local_addr().unwrap().port();
+        println!("listening on port: {}", port);
+        let mut incoming = listener.incoming();
+        while let Some(stream) = incoming.next().await {
+            match stream {
+                Ok(s) => {
+                    let conn = core.create_connection();
+                    self.pool
+                        .spawn(async move { MysqlIntermediary::run_on_tcp(conn, s).await });
+                }
+                Err(_) => {
+                    println!("connection error");
                 }
             }
-        })
-        .await;
+        }
         Ok(())
     }
 }

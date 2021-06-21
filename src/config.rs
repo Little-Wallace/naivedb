@@ -15,6 +15,7 @@ pub enum StorageType {
 pub struct Config {
     pub tikv: TiKVConfig,
     pub storage: StorageType,
+    pub connection_poo_size: usize,
 }
 
 impl Default for Config {
@@ -22,6 +23,7 @@ impl Default for Config {
         Config {
             tikv: TiKVConfig::default(),
             storage: StorageType::Mem,
+            connection_poo_size: 4,
         }
     }
 }
