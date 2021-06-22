@@ -44,9 +44,8 @@ impl Server {
     pub async fn start(&self) -> io::Result<()> {
         let core = self.core.clone();
         let address = self.address.clone();
-        let listener = tokio::net::TcpListener::bind(address.as_str())
-            .await
-            .unwrap();
+        let r = Builder::new_current_thread().build().unwrap();
+        let listener = tokio::net::TcpListener::bind(address.as_str()).await?;
         let port = listener.local_addr().unwrap().port();
         println!("listening on port: {}", port);
         while let Ok((stream, _)) = listener.accept().await {

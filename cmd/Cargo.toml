@@ -13,4 +13,4 @@ path = "src/naivedb-server.rs"
 clap = "2.32"
 toml = "0.5"
 naive-sql = { path = ".." }
-tokio = { version = "0.2", features = ["full"] }
+tokio = { version = "1.0", features = ["full"] }
