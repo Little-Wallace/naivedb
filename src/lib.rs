@@ -1,8 +1,8 @@
 mod common;
 mod config;
-mod mysql_driver;
 mod errors;
 mod executor;
+mod mysql_driver;
 mod planner;
 pub mod server;
 mod session;

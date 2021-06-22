@@ -43,7 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if v == "mem" {
             config.storage = StorageType::Mem;
         } else if v == "tikv" {
-            config.storage = StorageType::TiKV;
+            config.storage = StorageType::Tikv;
         } else {
             panic!("unkown storage type");
         }
