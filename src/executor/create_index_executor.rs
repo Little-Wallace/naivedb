@@ -43,7 +43,7 @@ impl Executor for CreateIndexExecutor {
                 return Err(MySQLError::IndexExist);
             }
         }
-        let mut index_info = self.plan.index_info.as_ref().clone();
+        let mut index_info = self.plan.index_info.clone();
         meta.max_index_id += 1;
         index_info.id = meta.max_index_id;
         meta.indices.push(Arc::new(index_info));
@@ -55,8 +55,7 @@ impl Executor for CreateIndexExecutor {
         }
         meta.columns = columns;
         let table_name = meta.name.clone();
-        let table = TableSource::new(Arc::new(meta));
-        session.add_table(table_name, Arc::new(table));
+        session.replace_table(table_name, meta);
         Ok(vec![])
     }
 }

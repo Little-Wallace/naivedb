@@ -1,12 +1,14 @@
 use crate::errors::MySQLResult;
 use crate::store::Transaction;
+use crate::table::schema::TableInfo;
 use crate::table::table::TableSource;
+use crate::table::DBTableManager;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 
 pub struct Session {
     cache: HashMap<String, Arc<TableSource>>,
-    tables: Arc<RwLock<HashMap<String, Arc<TableSource>>>>,
+    table_mgr: Arc<RwLock<DBTableManager>>,
     db: String,
     transaction: Option<Box<dyn Transaction>>,
     pub is_in_txn: bool,
@@ -15,9 +17,9 @@ pub struct Session {
 pub type SessionRef = Arc<Mutex<Session>>;
 
 impl Session {
-    pub fn new(tables: Arc<RwLock<HashMap<String, Arc<TableSource>>>>) -> Session {
+    pub fn new(table_mgr: Arc<RwLock<DBTableManager>>) -> Session {
         Session {
-            tables,
+            table_mgr,
             cache: HashMap::default(),
             db: "".to_string(),
             transaction: None,
@@ -33,11 +35,15 @@ impl Session {
         self.transaction = Some(txn)
     }
 
-    pub fn add_table(&mut self, name: String, table: Arc<TableSource>) {
-        let mut tables = self.tables.write().unwrap();
-        if let Some(t) = tables.insert(name.clone(), table.clone()) {
-            t.invalid();
-        }
+    pub fn add_table(&mut self, name: String, table_info: TableInfo) {
+        let mut tables = self.table_mgr.write().unwrap();
+        let table = tables.add_table(name.clone(), table_info);
+        self.cache.insert(name, table);
+    }
+
+    pub fn replace_table(&mut self, name: String, table_info: TableInfo) {
+        let mut tables = self.table_mgr.write().unwrap();
+        let table = tables.replace_table(name.clone(), table_info);
         self.cache.insert(name, table);
     }
 
@@ -47,7 +53,7 @@ impl Session {
                 return Some(table.clone());
             }
         }
-        let table = self.tables.read().unwrap().get(name).map(|t| t.clone());
+        let table = self.table_mgr.read().unwrap().get_table(name);
         if let Some(t) = table.as_ref() {
             self.cache.insert(name.clone(), t.clone());
         }

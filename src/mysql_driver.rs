@@ -6,26 +6,25 @@ use crate::planner::PlanBuilder;
 use crate::session::{Session, SessionRef};
 use crate::store::Storage;
 use crate::store::{MemStorage, TiKVStorage};
-use crate::table::table::TableSource;
+use crate::table::DBTableManager;
 use async_trait::async_trait;
 use msql_srv::{
     ErrorKind, InitWriter, MysqlShim, ParamParser, QueryResultWriter, StatementMetaWriter,
 };
 use sqlparser::dialect::MySqlDialect;
 use sqlparser::parser::Parser;
-use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 
 pub struct MysqlServerCore {
-    tables: Arc<RwLock<HashMap<String, Arc<TableSource>>>>,
+    table_mgr: Arc<RwLock<DBTableManager>>,
     storage: Arc<dyn Storage>,
 }
 
 impl Default for MysqlServerCore {
     fn default() -> MysqlServerCore {
-        let tables = Arc::new(RwLock::new(HashMap::default()));
+        let table_mgr = Arc::new(RwLock::new(DBTableManager::new()));
         MysqlServerCore {
-            tables,
+            table_mgr,
             storage: Arc::new(MemStorage::new()),
         }
     }
@@ -38,12 +37,12 @@ impl MysqlServerCore {
             StorageType::Mem => Arc::new(MemStorage::new()),
             _ => panic!("unsupport storage type"),
         };
-        let tables = Arc::new(RwLock::new(HashMap::default()));
-        MysqlServerCore { tables, storage }
+        let table_mgr = Arc::new(RwLock::new(DBTableManager::new()));
+        MysqlServerCore { table_mgr, storage }
     }
 
     pub fn create_connection(&self) -> ConnectionDriver {
-        ConnectionDriver::new(Session::new(self.tables.clone()), self.storage.clone())
+        ConnectionDriver::new(Session::new(self.table_mgr.clone()), self.storage.clone())
     }
 }
 

@@ -9,7 +9,6 @@ use sqlparser::ast::{
 };
 use sqlparser::dialect::MySqlDialect;
 use sqlparser::parser::Parser;
-use std::sync::Arc;
 
 pub struct PlanBuilder {
     session: SessionRef,
@@ -82,7 +81,7 @@ impl PlanBuilder {
         _or_replace: bool,
         _table_properties: Vec<SqlOption>,
     ) -> MySQLResult<PlanNode> {
-        let table_info = Arc::new(TableInfo::create(&name, &column_defs, &constrains)?);
+        let table_info = TableInfo::create(&name, &column_defs, &constrains)?;
         Ok(PlanNode::CreateTable(CreateTablePlan { table_info }))
     }
 
@@ -173,10 +172,7 @@ impl PlanBuilder {
                     primary: false,
                     unique,
                 };
-                Ok(PlanNode::CreateIndex(CreateIndexPlan {
-                    index_info: Arc::new(index_info),
-                    table,
-                }))
+                Ok(PlanNode::CreateIndex(CreateIndexPlan { index_info, table }))
             }
             None => Err(MySQLError::NoTable(table_name)),
         }

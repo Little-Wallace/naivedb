@@ -32,6 +32,7 @@ impl Server {
         let pool = Builder::new_multi_thread()
             .worker_threads(config.connection_pool_size)
             .thread_name("sql")
+            .enable_time()
             .build()
             .unwrap_or_else(|e| panic!("create pool failed, {}", e));
         Server {
@@ -44,7 +45,6 @@ impl Server {
     pub async fn start(&self) -> io::Result<()> {
         let core = self.core.clone();
         let address = self.address.clone();
-        let r = Builder::new_current_thread().build().unwrap();
         let listener = tokio::net::TcpListener::bind(address.as_str()).await?;
         let port = listener.local_addr().unwrap().port();
         println!("listening on port: {}", port);
