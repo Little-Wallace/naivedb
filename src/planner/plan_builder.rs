@@ -30,7 +30,6 @@ impl PlanBuilder {
     }
 
     pub fn statement_to_plan(&self, statement: Statement) -> MySQLResult<PlanNode> {
-        println!("{:?}", statement);
         match statement {
             Statement::Query(q) => self.sql_query_to_plan(&q),
             Statement::Insert {
@@ -188,7 +187,7 @@ impl PlanBuilder {
 mod tests {
     use super::*;
     use crate::common::EncodeValue;
-    use crate::conn::MysqlServerCore;
+    use crate::mysql_driver::MysqlServerCore;
     use crate::table::schema::{ColumnInfo, IndexInfo, IndexType, TableInfo, TableState};
     use crate::table::TableSource;
     use sqlparser::ast::DataType;

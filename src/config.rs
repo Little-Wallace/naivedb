@@ -6,7 +6,7 @@ use std::path::Path;
 #[serde(rename_all = "kebab-case")]
 pub enum StorageType {
     Mem,
-    TiKV,
+    Tikv,
     Local,
 }
 
@@ -15,7 +15,7 @@ pub enum StorageType {
 pub struct Config {
     pub tikv: TiKVConfig,
     pub storage: StorageType,
-    pub connection_poo_size: usize,
+    pub connection_pool_size: usize,
 }
 
 impl Default for Config {
@@ -23,7 +23,7 @@ impl Default for Config {
         Config {
             tikv: TiKVConfig::default(),
             storage: StorageType::Mem,
-            connection_poo_size: 4,
+            connection_pool_size: 4,
         }
     }
 }

@@ -12,7 +12,7 @@
 // limitations under the License.
 
 use crate::config::Config;
-use crate::conn::MysqlServerCore;
+use crate::mysql_driver::MysqlServerCore;
 use futures::TryFutureExt;
 use msql_srv::*;
 use std::io;
@@ -29,10 +29,11 @@ pub struct Server {
 
 impl Server {
     pub async fn new(address: String, config: Config) -> Server {
+        println!("{:?}", config);
         let core = Arc::new(MysqlServerCore::new(config.clone()).await);
         let pool = Builder::default()
             .threaded_scheduler()
-            .core_threads(config.connection_poo_size)
+            .core_threads(config.connection_pool_size)
             .build()
             .unwrap_or_else(|e| panic!("create pool failed, {}", e));
         Server {

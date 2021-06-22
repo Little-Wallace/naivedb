@@ -1,6 +1,6 @@
 mod common;
 mod config;
-mod conn;
+mod mysql_driver;
 mod errors;
 mod executor;
 mod planner;

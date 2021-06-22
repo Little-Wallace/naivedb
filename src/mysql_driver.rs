@@ -34,7 +34,7 @@ impl Default for MysqlServerCore {
 impl MysqlServerCore {
     pub async fn new(config: Config) -> MysqlServerCore {
         let storage: Arc<dyn Storage> = match config.storage {
-            StorageType::TiKV => Arc::new(TiKVStorage::create(&config.tikv).await.unwrap()),
+            StorageType::Tikv => Arc::new(TiKVStorage::create(&config.tikv).await.unwrap()),
             StorageType::Mem => Arc::new(MemStorage::new()),
             _ => panic!("unsupport storage type"),
         };
@@ -42,19 +42,19 @@ impl MysqlServerCore {
         MysqlServerCore { tables, storage }
     }
 
-    pub fn create_connection(&self) -> MysqlConnection {
-        MysqlConnection::new(Session::new(self.tables.clone()), self.storage.clone())
+    pub fn create_connection(&self) -> ConnectionDriver {
+        ConnectionDriver::new(Session::new(self.tables.clone()), self.storage.clone())
     }
 }
 
-pub struct MysqlConnection {
+pub struct ConnectionDriver {
     session: SessionRef,
     storage: Arc<dyn Storage>,
 }
 
-impl MysqlConnection {
-    pub fn new(session: Session, storage: Arc<dyn Storage>) -> MysqlConnection {
-        MysqlConnection {
+impl ConnectionDriver {
+    pub fn new(session: Session, storage: Arc<dyn Storage>) -> ConnectionDriver {
+        ConnectionDriver {
             session: SessionRef::new(Mutex::new(session)),
             storage,
         }
@@ -65,7 +65,7 @@ impl MysqlConnection {
 }
 
 #[async_trait]
-impl MysqlShim for MysqlConnection {
+impl MysqlShim for ConnectionDriver {
     type Error = MySQLError;
     /// Called when client switches database.
     async fn on_init(&mut self, db: &str, w: InitWriter<'_>) -> Result<(), Self::Error> {

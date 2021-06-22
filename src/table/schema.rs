@@ -376,6 +376,7 @@ impl TableInfo {
                 EncodeValue::Double(v)
             }
             DataType::String => EncodeValue::Bytes(val.as_bytes().to_vec()),
+            DataType::Char(_) => EncodeValue::Bytes(val.as_bytes().to_vec()),
             _ => return Err(MySQLError::ColumnMissMatch),
         };
         Ok(v)
